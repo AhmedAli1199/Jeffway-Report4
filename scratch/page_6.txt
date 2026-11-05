@@ -1,0 +1,46 @@
+6 ===
+●​ Step 1.6: Large Block Sectioning: For large-scale developments, the agent sections the communal 
+takeoff into the standard Jeffway categories: Design, Prelims, Distribution, BNO Works, Containment, 
+Small Power, and Lighting. Each section maps directly to the corresponding area in the Communals 
+tab of the estimating spreadsheet. Within each section, the agent separates Materials (with 
+quantities and costs) from Labour (with estimated hours and labour costs). 
+●​ Step 1.7: Spreadsheet Population (House Type Tabs): The agent opens the Jeffway estimating 
+template and populates the individual house type tabs (e.g., 'Giganti', 'Crocus', 'Conte', 'Lunaria', 
+'Violet'). For each tab, it fills in the Qty, Manufacturer (defaulting to Deta where applicable), Part 
+Number, Description, Unit Price (from historical data or left blank for supplier pricing), and Total 
+columns. The structure follows the existing format: consumer units and MCBs first, then sockets, 
+switches, light fittings, accessories, and specialist items. 
+●​ Step 1.8: Spreadsheet Population (First Fix): The agent populates the master '1st Fix' tab with all 
+cable quantities (e.g., 6242Y 2.5mm, 6242Y 1.5mm, SWA), back boxes (1-gang, 2-gang, circular), 
+fixings, and sundries. These are categorised across the columns by house type, matching the existing 
+47-column layout. 
+●​ Step 1.9: Spreadsheet Population (Communals): For flat developments, the agent populates the 
+'Communals' tab, filling in quantities across all subsections: Submains, Power, Low Voltage & Aerial, 
+Lighting, AOV, Door Entry, Bin Stores, Cycle Stores, and Retail Units. It calculates both material costs 
+and labour hours for each section. 
+●​ Step 1.10: Accommodation Schedule Cross-Reference: The agent reads the Accommodation 
+Schedule provided in the tender pack (listing every plot number, house type, beds, tenure, 
+specification, and garage type) and uses this to calculate site-wide totals. It multiplies the per-type 
+takeoff quantities by the number of plots of each type to produce the aggregated figures for the 
+master 'Tender' summary tab. 
+●​ Step 1.11: Special Requirements Check: The agent checks the specification and drawings for special 
+requirements including EV charging (identifying which plots require it and whether it is on-dwelling 
+or separate), solar PV connections, attached vs. detached garages (with different electrical 
+requirements), site compound electrical requirements, and any sales area or show home 
+specifications. 
+●​ Step 1.12: Discrepancy Flagging: The agent cross-references the written specification against the 
+drawings. If a discrepancy is found (e.g., spec mandates bathroom downlights but drawings show 
+pendants, or spec requires a specific manufacturer but drawings show a generic symbol), it generates 
+an alert note on the summary tab for the estimator to query with the developer before finalising. 
+●​ Step 1.13: Estimator Review Checkpoint: The agent pauses the workflow and sends a notification to 
+the estimator that the takeoff is complete and ready for review. The estimator reviews the quantities 
+in the spreadsheet and provides approval to proceed to pricing. This is the critical safety net before 
+anything feeds into the commercial stages. 
+Module 2: Labour Pricing & Estimation 
+●​ Trigger: The estimator reviews and approves the completed takeoff from Module 1. 
+●​ Step 2.1: Historical Data Retrieval: The agent accesses the historical pricing database, pulling labour 
+costs from previous tenders of comparable size and specification (e.g., previous Lovell, Crest 
+Nicholson, or Taylor Wimpey projects). It retrieves the standard labour times from the Luckins 
+reference data for each component type. 
+
+

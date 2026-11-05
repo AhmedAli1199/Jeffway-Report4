@@ -1,0 +1,47 @@
+11 ===
+●​ Step 6.1: Statement Ingestion & Normalisation: The agent ingests the Excel statement from the 
+supplier using the same OCR-first approach as Module 5. Because each of the six suppliers uses 
+different column formats (e.g., Templegate uses 15 columns with DATE, NUMBER, CODE, 
+DESCRIPTION, QTY, PRICE, PER, DISC, SELL, SELLING, and ORDER REF; Eddis & Walsall uses 7 columns; 
+KEW uses 17 columns with separate Disc% and Value fields; Medlock uses 9 columns), the agent 
+normalises all formats into a standard structure. We will need sample statements from each supplier 
+upfront to map the column structures before building the ingestion logic. 
+●​ Step 6.2: Order Reference Parsing & Normalisation: The agent reads the order reference on each 
+line item (e.g., '2145 11 LLANYRNEWYDD', '2226/STONEWOOD RETURN', 'TW NAILSEA', '2168 PV') 
+and maps it to the correct project site code, plot number, and fix type. Where operatives or site 
+foremen have used inconsistent formatting, the agent applies normalisation logic to resolve the 
+reference. 
+●​ Step 6.3: Project Spend Allocation: The agent allocates each line item to the correct project in the 
+master Project Spend Tracker. It logs the material cost against the specific project, building a 
+cumulative spend picture. 
+●​ Step 6.4: Price Verification: The agent cross-references the charged unit price on each line item 
+against the agreed tender price established with the chosen supplier in Module 3. If the supplier has 
+charged a higher price than agreed (e.g., due to an unapproved price increase), the agent flags the 
+item with the exact financial impact calculated. 
+●​ Step 6.5: Discount Verification: The agent checks that the correct discount percentage has been 
+applied to each line item. Suppliers sometimes fail to apply the agreed discount, resulting in 
+overcharges. For example, if KEW has agreed a 70% discount on cable glands but only applied 65%, 
+the agent flags the difference and calculates the financial impact. 
+●​ Step 6.6: Quantity Monitoring: The agent compares the cumulative quantity of each item purchased 
+for the project against the total quantity allowed in the original takeoff. If the site has ordered 150 
+double sockets but the takeoff only allowed for 120, the agent flags the overrun and calculates the 
+cost of the excess. 
+●​ Step 6.7: Unrecognised Purchase Detection: The agent identifies any line items with order references 
+that do not match a known project or plot. These are flagged as potential unauthorised purchases 
+(e.g., operatives buying materials for personal use on the company account). The agent generates a 
+separate alert for these items. 
+●​ Step 6.8: Returns & Credits Processing: The agent identifies negative quantities (returns) in the 
+supplier statements and reconciles them to ensure the project spend is accurately reduced. It tracks 
+handling charges on returns and ensures they are accounted for. 
+●​ Step 6.9: Monthly Exception Report: The agent generates a comprehensive monthly exception 
+report for the finance team, organised by project. The report includes: items charged above the 
+agreed rate, missing or incorrect discounts (with the exact financial impact), quantity overruns by 
+item, unrecognised or suspicious purchases, and a project-level summary comparing total material 
+spend to date against the tendered material allowance. 
+●​ Step 6.10: Supplier Credit Note Tracking: When the finance team reverts back to the supplier for a 
+credit based on the exception report, the agent tracks the outstanding credit notes and reconciles 
+them against subsequent statements to ensure the credits are actually applied. 
+●​ Step 6.11: Profitability Dashboard Update: The agent updates the project profitability view, 
+combining the material spend data from this module with the labour spend data from Module 5, 
+
+

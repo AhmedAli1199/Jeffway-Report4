@@ -1,0 +1,633 @@
+=== PAGE 1 ===
+AI Automation Opportunity Report 4 
+Prepared for: Jeffway Construction Ltd    Prepared by: Cybix    Date: 23 March 2026 
+ 
+1. Overview 
+This report provides a definitive, fully-scoped breakdown of the AI-powered automation opportunity for 
+Jeffway Construction Ltd, specifically focusing on the electrical estimating, commercial tracking, and 
+labour processing lifecycle. The purpose of this document is to detail, in black and white, every step, 
+trigger, and action that will be built, ensuring complete clarity on the solution being delivered. This 
+automation is designed to act as a digital estimator and commercial assistant within your existing 
+infrastructure, seamlessly connecting your tender documents, supplier quotes, EQUE2 payroll system, 
+Monday.com pipeline, and financial tracking spreadsheets. 
+The primary business objective is to eliminate the significant administrative burden which currently 
+consumes the commercial and estimating teams, introduces pricing risks, and creates blind spots in 
+project profitability. By automating the repetitive, rules-based tasks of drawing takeoffs from complex 
+46-page architectural packs, multi-supplier price comparisons, PDF timesheet processing, and material 
+invoice checking, we will unlock substantial value, improve estimating accuracy, and ensure that every 
+project's profitability is protected from the tender stage right through to final completion. 
+Mini Report Note 
+I will add this is just a mini report, as there are a couple of automation workflows focused on the 
+commercial and estimating process, and we will do the same kind of style report as this for the other 
+sessions we have. In the full report, we'll have a look at your competitive market, different tools the team 
+can use internally, and lots more, but this should give you a bit of a flavour for this smaller automation 
+process. 
+ 
+2. The Problem: Current Process & Inefficiencies 
+Jeffway Construction's current process for electrical estimating and commercial tracking relies heavily on 
+manual data extraction and spreadsheet management. This creates a series of tangible business 
+challenges that directly impact commercial capacity and margin protection. 
+The core of the problem begins at the tender stage. When a tender pack estimators must manually 
+review extensive architectural drawing packs (often 40+ pages per house type), counting every single 
+socket, light fitting, and cable run by hand. This data is then manually transcribed into complex, multi-tab 
+spreadsheets separating 1st Fix, 2nd Fix, and Communals. The process of obtaining supplier quotes 
+involves sending out lists to up to six different suppliers (including Templegate, Medlock, and KEW), 
+waiting for returns in varying formats, and manually comparing line items. Once a project is won, the 
+burden shifts to the commercial team, who must manually process handwritten PDF timesheets from 
+
+
+=== PAGE 2 ===
+operatives, check them against allowed budgets per fix stage, enter the data into EQUE2, and 
+painstakingly review hundreds of supplier invoice line items to catch overcharges or missing discounts. 
+This manual dependency creates a cascade of further inefficiencies: 
+●​ Estimating Bottlenecks & Capacity Constraints: The time-intensive nature of manual drawing 
+takeoffs means estimators spend hours counting symbols on architectural elevations and floor plans 
+rather than strategising on pricing or negotiating better rates. This limits the volume of tenders the 
+business can accurately process. 
+●​ Margin Erosion through Pricing Errors: Manually comparing supplier quotes across six different 
+spreadsheet formats and tracking volatile material prices leaves room for human error. Furthermore, 
+when suppliers fail to apply agreed discounts on their monthly invoices, the manual checking process 
+often misses these discrepancies, leading to direct financial loss. 
+●​ Labour Tracking Inaccuracies: Processing handwritten PDF timesheets manually and 
+cross-referencing them against the complex labour tab (which splits pricing across 10 categories like 
+Ducting, 1st Fix, Finals, and EV Chargers) is highly prone to error. Operatives using inconsistent 
+wording or claiming for plots that have already been paid can easily slip through, resulting in 
+overpayments and skewed project profitability data. 
+●​ Lack of Performance Visibility: Because the data is locked in disparate spreadsheets, PDFs, and 
+EQUE2, it is incredibly difficult to identify trends, such as which operatives consistently take longer on 
+specific house types, or which plots are consistently underpriced at the tender stage. 
+ 
+3. The Solution: A Bespoke AI Commercial Assistant 
+We will build a bespoke AI-powered digital assistant that operates directly across your existing estimating 
+and commercial workflows. This is not a new software platform to learn; it is an intelligent agent that 
+performs the heavy lifting of data extraction, comparison, and tracking within the tools you already use, 
+including Monday.com, EQUE2, Sage, and your highly structured Excel workbooks. 
+The automation will utilise advanced AI vision capabilities (specifically GPT-4o Vision) to read full 
+architectural PDF packs, identify the relevant floor plans, and automatically perform component takeoffs. 
+It will standardise the supplier quoting process, intelligently comparing returns from all six of your regular 
+suppliers to secure the best margins. Once a project is live, the agent will use a dedicated OCR engine to 
+process handwritten operative timesheets, allocate costs to the correct plots and fix stages, prepare the 
+data for EQUE2, and meticulously scan supplier statements to flag overcharges or anomalies. It acts as a 
+tireless commercial guardian, protecting your margins and freeing your human team to focus on strategic 
+project management and negotiation. 
+Proof of Concept: AI Vision Takeoff 
+To demonstrate the capability of the AI vision model, we ran a sample architectural electrical plan 
+through the system. This was a standard residential floor plan with BS 1192 / IEC electrical symbols. The 
+AI successfully identified the rooms, counted the components, and produced a structured output without 
+any human intervention or pre-configuration. 
+AI Output Example (Sample House Type): 
+
+
+=== PAGE 3 ===
+Room 
+Recessed 
+Downlights 
+(R) 
+Ceiling 
+Pendants 
+Double 
+Sockets 
+Single 
+Sockets 
+Light 
+Switches 
+DP Switches 
+($) 
+Cooker 
+Switch ($$) 
+Living Room 
+14 
+1 
+5 
+0 
+2 
+0 
+0 
+Kitchen 
+0 
+3 
+4 
+0 
+2 
+2 
+1 
+Bedroom 1 
+0 
+1 
+3 
+0 
+1 
+0 
+0 
+Bedroom 2 
+2 
+1 
+3 
+0 
+2 
+0 
+0 
+Bedroom 3 
+2 
+1 
+2 
+0 
+1 
+0 
+0 
+Study 
+2 
+1 
+3 
+0 
+2 
+1 
+0 
+WC (Main) 
+1 
+0 
+1 
+0 
+1 
+1 
+0 
+WC 
+(En-suite) 
+1 
+0 
+0 
+0 
+1 
+0 
+0 
+Totals 
+22 
+8 
+21 
+0 
+12 
+4 
+1 
+ 
+Additional Items Detected: 
+●​ 1x Consumer Unit / Distribution Board (top-left corridor entry point) 
+●​ 6x Circuit wiring runs identified (colour-coded: lighting, ring main, cooker, shower, etc.) 
+●​ Smoke / heat detector positions identified at key locations 
+This output is exactly the data required to populate the specific house type tabs (e.g., Giganti, Crocus, 
+Conte) in the Jeffway estimating spreadsheet. The AI reads the plan, counts the components, sections 
+them by room, and produces a structured output that can be dropped directly into the existing workflow. 
+ 
+4. Expected Impact & Quantifiable Value 
+The implementation of this automation will deliver immediate, measurable, and substantial returns 
+across your commercial operations. 
+Area of Impact 
+Benefit & Value Proposition 
+Time Saving & Capacity Creation 
+Estimators and commercial administrators will 
+reclaim hundreds of hours per month currently 
+spent counting symbols on 46-page drawing packs 
+and transcribing handwritten timesheets into 
+EQUE2. This time will be redirected to pricing 
+more tenders and managing live projects 
+proactively. 
+
+
+=== PAGE 4 ===
+Margin Protection & Cost Control 
+Automated invoice checking ensures that every 
+supplier overcharge, missed discount, or 
+unauthorised purchase is immediately flagged. 
+This directly protects project margins by 
+preventing value leakage across the 130,000+ 
+material lines processed annually. 
+Enhanced Accuracy & Consistency 
+Removing human data entry from the takeoff and 
+timesheet allocation processes eliminates 
+transcription errors, ensuring that tenders are 
+perfectly accurate and operatives are paid 
+correctly for the exact fix stage completed. 
+Performance Analytics 
+By digitising the timesheet and labour tracking 
+process, the business gains instant visibility into 
+operative performance, allowing management to 
+identify inefficiencies and adjust future tender 
+pricing accordingly. 
+Accelerated Quoting Lifecycle 
+The time from logging a tender to submitting a 
+fully priced proposal will be dramatically reduced. 
+Automated takeoffs and instant multi-supplier 
+quote comparisons accelerate the entire 
+estimating cycle. 
+ 
+5. Implementation Notes 
+Our investigation confirms that the core workflow relies on complex architectural PDF packs, handwritten 
+PDF timesheets, and highly structured, multi-tab Excel spreadsheets. The automation will therefore be 
+built using a two-step approach for document reading: a dedicated OCR engine (such as Google 
+Document AI or Azure Document Intelligence) to extract the text first, then passing it to GPT-4o Vision for 
+normalisation, spatial understanding, and logic. This two-step approach gives significantly better accuracy 
+than vision alone, especially on handwritten timesheets or dense architectural elevations. AI vision 
+models are very capable at reading architectural drawings and counting electrical components, and this is 
+well-established technology (dedicated tools like Drawer AI already do this commercially with up to 70% 
+time savings), so we are confident in the approach. 
+We will establish a dedicated SharePoint or OneDrive folder structure to act as the trigger point for new 
+tender uploads. The AI will be trained to recognise your specific spreadsheet formats (including the 
+173-row Communals tab and the 10-category Labour Prices sheet) to ensure seamless data population. 
+Crucially, tasks requiring commercial negotiation or final sign-off (such as challenging a supplier on price 
+or approving a final tender letter) are explicitly preserved as human-in-the-loop checkpoints. 
+
+
+=== PAGE 5 ===
+Note: The investment figures detailed in Section 8 cover the design, build, and implementation of the 
+automation. The ongoing API usage costs for the AI vision and OCR models are not included and will be 
+billed as a running monthly operational cost based on usage volume. 
+ 
+6. Full, Unabridged Automation Breakdown 
+This section details every step the AI agent will perform. This is the definitive scope of work. 
+Module 1: AI-Powered Electrical Plan Takeoff 
+●​ Trigger: An estimator uploads a new tender pack (architectural PDFs and specifications) into a 
+designated 'New Tenders' SharePoint folder, and the project is logged in the new build pipeline. 
+●​ Step 1.1: Document Parsing & Page Identification: The agent scans the uploaded architectural packs 
+(often 40+ pages per house type, including substructure plans, setting out plans, joists plans, roof 
+plans, elevations, sections, and schedules). It intelligently identifies and extracts only the relevant 
+floor plans (e.g., 'Ground Floor Setting Out', 'First Floor Setting Out') while ignoring elevations, roof 
+truss details, staircase details, and substructure plans that do not contain electrical data. It also reads 
+the cover sheet to identify the house type name, the applicable plots, the specification level (e.g., 
+Lovell Gold, Lovell Silver, Shared Ownership, Rented), and whether the build is Masonry or Timber 
+Frame. 
+●​ Step 1.2: Symbol Key Detection: If the tender pack includes a symbol legend or key, the agent ingests 
+it and maps each symbol to a component category. If no key is provided, the agent defaults to the 
+standard BS 1192 / IEC electrical symbol library. The estimator can supply a custom key at any time, 
+which the agent will store for future use with that developer or architect. 
+●​ Step 1.3: AI Vision Extraction (Houses): For standard housing plots, the agent processes the 
+identified floor plans for each house type (e.g., Giganti, Crocus, Conte, Lunaria, Violet). Using GPT-4o 
+Vision, it scans the plan room-by-room, counting every electrical component: single sockets, double 
+sockets, USB sockets, fused spur units, light switches (1-gang, 2-gang, 3-gang, dimmer), ceiling 
+pendants, recessed downlights, extractor fans, cooker switches, cooker control units, double-pole 
+switches, consumer units, MCBs, RCBOs, smoke detectors, heat detectors, CO detectors, shaver 
+sockets, TV plates, data plates, oven connections, hob connections, ASHP connections, EV charger 
+points, and any PV connections. Each item is logged against the room it appears in. 
+●​ Step 1.4: AI Vision Extraction (Flats): For flat developments, the agent processes each flat type 
+drawing individually (e.g., Apartment M1A GF, Apartment M1B GF, Apartment M1C FF), performing 
+the same room-by-room component count as Step 1.3. Each flat type is treated as a distinct unit with 
+its own takeoff. The agent also identifies the floor level (Ground Floor, First Floor, Second Floor) for 
+each flat type. 
+●​ Step 1.5: Communal Area Separation: For blocks of flats, the agent identifies and separates 
+communal areas (entrance lobbies, corridors, stairwells, landings, bin stores, cycle stores, plant 
+rooms, retail units) from individual apartments. Communal components are logged into their own 
+dedicated section, broken down by floor and area. This includes communal lighting (emergency and 
+standard), small power (landlord sockets), distribution boards, submains cabling, containment (cable 
+tray, basket, trunking), TV aerial distribution, door entry and intercom systems, fire alarm devices, 
+and AOV (Automatic Opening Vent) systems. 
+
+
+=== PAGE 6 ===
+●​ Step 1.6: Large Block Sectioning: For large-scale developments, the agent sections the communal 
+takeoff into the standard Jeffway categories: Design, Prelims, Distribution, BNO Works, Containment, 
+Small Power, and Lighting. Each section maps directly to the corresponding area in the Communals 
+tab of the estimating spreadsheet. Within each section, the agent separates Materials (with 
+quantities and costs) from Labour (with estimated hours and labour costs). 
+●​ Step 1.7: Spreadsheet Population (House Type Tabs): The agent opens the Jeffway estimating 
+template and populates the individual house type tabs (e.g., 'Giganti', 'Crocus', 'Conte', 'Lunaria', 
+'Violet'). For each tab, it fills in the Qty, Manufacturer (defaulting to Deta where applicable), Part 
+Number, Description, Unit Price (from historical data or left blank for supplier pricing), and Total 
+columns. The structure follows the existing format: consumer units and MCBs first, then sockets, 
+switches, light fittings, accessories, and specialist items. 
+●​ Step 1.8: Spreadsheet Population (First Fix): The agent populates the master '1st Fix' tab with all 
+cable quantities (e.g., 6242Y 2.5mm, 6242Y 1.5mm, SWA), back boxes (1-gang, 2-gang, circular), 
+fixings, and sundries. These are categorised across the columns by house type, matching the existing 
+47-column layout. 
+●​ Step 1.9: Spreadsheet Population (Communals): For flat developments, the agent populates the 
+'Communals' tab, filling in quantities across all subsections: Submains, Power, Low Voltage & Aerial, 
+Lighting, AOV, Door Entry, Bin Stores, Cycle Stores, and Retail Units. It calculates both material costs 
+and labour hours for each section. 
+●​ Step 1.10: Accommodation Schedule Cross-Reference: The agent reads the Accommodation 
+Schedule provided in the tender pack (listing every plot number, house type, beds, tenure, 
+specification, and garage type) and uses this to calculate site-wide totals. It multiplies the per-type 
+takeoff quantities by the number of plots of each type to produce the aggregated figures for the 
+master 'Tender' summary tab. 
+●​ Step 1.11: Special Requirements Check: The agent checks the specification and drawings for special 
+requirements including EV charging (identifying which plots require it and whether it is on-dwelling 
+or separate), solar PV connections, attached vs. detached garages (with different electrical 
+requirements), site compound electrical requirements, and any sales area or show home 
+specifications. 
+●​ Step 1.12: Discrepancy Flagging: The agent cross-references the written specification against the 
+drawings. If a discrepancy is found (e.g., spec mandates bathroom downlights but drawings show 
+pendants, or spec requires a specific manufacturer but drawings show a generic symbol), it generates 
+an alert note on the summary tab for the estimator to query with the developer before finalising. 
+●​ Step 1.13: Estimator Review Checkpoint: The agent pauses the workflow and sends a notification to 
+the estimator that the takeoff is complete and ready for review. The estimator reviews the quantities 
+in the spreadsheet and provides approval to proceed to pricing. This is the critical safety net before 
+anything feeds into the commercial stages. 
+Module 2: Labour Pricing & Estimation 
+●​ Trigger: The estimator reviews and approves the completed takeoff from Module 1. 
+●​ Step 2.1: Historical Data Retrieval: The agent accesses the historical pricing database, pulling labour 
+costs from previous tenders of comparable size and specification (e.g., previous Lovell, Crest 
+Nicholson, or Taylor Wimpey projects). It retrieves the standard labour times from the Luckins 
+reference data for each component type. 
+
+
+=== PAGE 7 ===
+●​ Step 2.2: Labour Calculation (Houses): For each house type, the agent calculates the base labour 
+cost broken down by the 10 standard Jeffway categories: Ducting, 1st Fix, 2nd Fix, Finals & Heating, 
+Fit Appliances, Weather Compensator, 20mm Condensate Pipe, Test, EV Charger, and Garages. The 
+calculation is based on the total component count for that house type multiplied by the standard 
+labour time, then multiplied by the agreed rate. 
+●​ Step 2.3: Labour Calculation (Communal): For communal areas in flat developments, the agent 
+calculates labour costs by section (Containment, Lighting, Small Power, Distribution, AOV, Door Entry, 
+etc.), using the agreed hourly rate (e.g., £20/hour as per the existing Communals tab) multiplied by 
+the estimated hours per section. It produces both a per-section cost and a total communal labour 
+package figure. 
+●​ Step 2.4: Historical Comparison: The agent compares the calculated labour price against actual costs 
+from previous projects of similar size and complexity. If the calculated figure deviates significantly 
+from historical actuals (e.g., the tender says £400 per 1st Fix for a Crocus but previous actuals 
+averaged £450), the agent flags this for the estimator's attention with a clear recommendation. 
+●​ Step 2.5: Markup Application: The agent applies the standard commercial markups to generate the 
+final tender labour price. Based on the existing Jeffway structure, this includes the Labour Markup of 
+26.5% (NI & Holidays), Office Overhead of 14%, and Net Profit Margin of 9.9%. These percentages are 
+stored centrally and can be updated at any time. 
+●​ Step 2.6: Operative Pricing Sheet Generation: The agent generates the 'Labour Prices' sheet that will 
+be issued to operatives on site. This lists every plot number, house type, tenure (OM/Affordable), 
+specification (Gold/Silver/Shared Ownership/Rented), and the agreed price-work value for each of 
+the 10 fix stage categories. This is the sheet the lads use to know what they get paid per plot per fix. 
+●​ Step 2.7: Margin Pot Calculation: The agent calculates the difference between the labour figure 
+included in the tender (what the client pays) and the price-work figure issued to operatives (what the 
+lads get paid), highlighting the retained margin per plot and per fix stage. This gives the commercial 
+team instant visibility of the labour margin pot. 
+●​ Step 2.8: Human Override Checkpoint: The agent highlights the suggested labour pricing in the 
+spreadsheet, pausing the workflow to allow the estimator to review and adjust for known complexity 
+factors (e.g., three-storey properties, difficult access, non-standard layouts, timber frame vs. masonry 
+differences). The estimator provides final approval before the workflow proceeds. 
+Module 3: Supplier Quoting & Comparison 
+●​ Trigger: The estimator approves the material quantities and labour pricing from Modules 1 and 2. 
+●​ Step 3.1: Quote Request Generation: The agent extracts the consolidated material list from the 
+master spreadsheet and generates standardised Excel quote request forms. The forms include 
+product descriptions, manufacturer product codes (e.g., Deta SD1209CHW for a 2G Switched Socket), 
+and required quantities, with the unit cost column left blank for the supplier to complete. 
+●​ Step 3.2: Supplier Selection & Dispatch: The agent references the stored supplier list to identify the 
+designated wholesalers for this project. While three suppliers is the standard approach, the agent can 
+dispatch to up to six (from the pool of Templegate, Eddis & Walsall, KEW, Medlock, Moss, and Rexel) 
+if requested. The agent automatically emails the quote requests to all selected wholesalers, 
+requesting pricing to be returned in the provided format within a specified timeframe. 
+●​ Step 3.3: Quote Ingestion & Format Normalisation: As suppliers return their completed sheets (via 
+email), the agent ingests each response. Because each supplier uses different column formats (e.g., 
+
+
+=== PAGE 8 ===
+Templegate uses 15 columns including DATE, CODE, DESCRIPTION, QTY, PRICE, DISC, and SELL; Eddis 
+& Walsall uses 7 columns; KEW uses 17 columns with separate Disc% and Value fields), the agent 
+normalises all returns into a single, unified comparison structure. It validates that every line item has 
+been priced and flags any gaps or items marked as 'not available'. 
+●​ Step 3.4: Line-by-Line Comparison: The agent compares the unit prices line-by-line across all 
+returned quotes. It produces a comparison matrix showing each item, the quoted prices from each 
+supplier, and the percentage variance between them. 
+●​ Step 3.5: Rebate & Net Cost Calculation: The agent factors in any known annual or quarterly rebates 
+for each supplier (stored in the system and updated periodically). It calculates the true net cost per 
+supplier after rebates are applied, which may change the ranking. 
+●​ Step 3.6: Cable Price Volatility Check: For cable items specifically (which are known to fluctuate 
+significantly), the agent compares the quoted prices against the last three months of cable pricing 
+data from previous orders. If prices have moved significantly, it flags this to the estimator with a 
+recommendation on whether to lock in now or wait. 
+●​ Step 3.7: Best Package Recommendation: The agent identifies the most cost-effective supplier for 
+the overall package and presents a summary showing the total cost from each supplier (pre- and 
+post-rebate), along with a clear recommendation. 
+●​ Step 3.8: Human-in-the-Loop Negotiation Flag: The agent highlights specific line items where a 
+non-selected supplier is significantly cheaper (e.g., light switches at £1 from Supplier B vs. £3 from 
+the recommended Supplier A). It generates a negotiation brief for the commercial team, suggesting 
+they approach the preferred supplier to match on those specific items before confirming the order. 
+●​ Step 3.9: Specialist Item Routing: If certain items (e.g., specialist light fittings, solar PV mounting kits, 
+specific manufacturer products) are not stocked by the main wholesalers or are significantly cheaper 
+direct from the manufacturer, the agent flags these for separate procurement and excludes them 
+from the main package comparison. It can also route specialist items to sub-contractors for pricing 
+where required. 
+●​ Step 3.10: Final Population & Handover: Upon final supplier selection by the commercial team, the 
+agent populates the chosen unit prices into the master tender spreadsheet. It also generates the 
+second fix takeoff sheets per plot type that will be sent to the chosen supplier for order fulfilment 
+once the project is won. The agent advises finance/commercial of the agreed costs against the 
+takeoffs. 
+Module 4: Tender Document Generation 
+●​ Trigger: The master tender spreadsheet is fully populated and the estimator marks the tender as 
+'Ready for Submission'. 
+●​ Step 4.1: Data Extraction: The agent extracts the final pricing, quantities, plot types, material 
+specifications, supplier details, and labour allowances from the completed spreadsheet, including the 
+Accommodation Schedule data (plot numbers, house types, beds, tenure, specification, garage 
+types). 
+●​ Step 4.2: Tender Letter Drafting: The agent opens the standard Jeffway Tender Letter Word template 
+and maps the variables correctly. It populates the document with the specific project details, 
+including a section-by-section breakdown of allowances (Distribution, Containment, Lighting, Small 
+Power, etc.), the agreed rates, material markups, and total costs per house type and for communal 
+
+
+=== PAGE 9 ===
+areas. The letter is drafted as a professional scope document that clearly communicates the value of 
+the proposal. 
+●​ Step 4.3: Inclusions Section: The agent drafts a detailed inclusions section listing everything Jeffway 
+is allowing for in the tender: specific consumer unit types, socket specifications (e.g., Deta Slimline 
+range), light fitting types, cable specifications, testing and certification, EV charging (if applicable), PV 
+connections (if applicable), ASHP connections, and any specialist installations. This section is 
+comprehensive enough that there is no ambiguity about what is covered. 
+●​ Step 4.4: Exclusions & Qualifications: Based on the discrepancies flagged in Step 1.12 and standard 
+company policy, the agent drafts the specific exclusions (items not included in the price) and 
+qualifications (assumptions made, e.g., 'quotation based on specification Rev D dated [date]'). This 
+protects Jeffway commercially by making the scope crystal clear. 
+●​ Step 4.5: Tender Summary Sheet: The agent ensures the final 'Tender' summary tab in the 
+spreadsheet is perfectly formatted for client submission, showing house types, plot counts, total 
+value, cost per plot (with markups), materials per plot, and labour per plot. 
+●​ Step 4.6: PDF Conversion & Storage: The agent saves the drafted Word document, converts a copy to 
+PDF, and stores both alongside the final spreadsheet in the project's SharePoint folder, labelled as 
+Revision A. 
+●​ Step 4.7: Revision Management: When the developer requests changes (e.g., 'you're too expensive, 
+can you do it for less?'), the estimator instructs the agent to create a new revision. The agent 
+duplicates the spreadsheet and tender letter, applies the requested adjustments (tweaked labour 
+rates, updated supplier buy-in, revised markups), and saves as Revision B, C, D, etc. Each revision is 
+stored alongside the previous versions for a full audit trail. 
+●​ Step 4.8: Submission Notification: The agent notifies the estimator that the tender pack 
+(spreadsheet + letter + PDF) is ready for submission, with a link to the SharePoint folder. 
+Module 5: Timesheet Processing & Labour Tracking 
+●​ Trigger: An operative emails their weekly handwritten PDF timesheet to the Contracts Manager, who 
+checks and approves it before forwarding to the finance inbox. 
+●​ Step 5.1: OCR Data Extraction: The agent uses a dedicated OCR engine (such as Google Document AI 
+or Azure Document Intelligence) to read the handwritten PDF timesheet. It extracts the operative's 
+name, employee reference (e.g., JWE262), site code (e.g., 2168 Ph6), plot numbers, descriptions of 
+work, and the hours or price-work amount claimed for each line item. The two-step OCR-then-GPT 
+approach gives significantly better accuracy than vision alone on handwritten or inconsistently 
+formatted timesheets. 
+●​ Step 5.2: Terminology Normalisation: The agent passes the OCR text to GPT-4o to normalise 
+inconsistent wording. For example, 'PL2' is mapped to 'Plot 2', 'finals' is mapped to 'Finals & Heating', 
+and abbreviations are resolved against the project's known 10 fix types (Ducting, 1st Fix, 2nd Fix, 
+Finals & Heating, Fit Appliances, Weather Compensator, 20mm Condensate Pipe, Test, EV Charger, 
+Garages). 
+●​ Step 5.3: Site Code Validation: The agent verifies that the site code on the timesheet matches a live 
+project in the system (cross-referencing against the 'Current Works' tab in the Wages Summary). If 
+the site code is unrecognised, the line item is flagged for manual review. 
+●​ Step 5.4: Plot & Fix Availability Check: The agent checks the master 'LABOUR' tab for the relevant 
+project to confirm that the specific plot and fix type have not already been claimed by another 
+
+
+=== PAGE 10 ===
+operative. If the cell is already populated with another operative's initials, the agent flags this as a 
+potential duplicate claim and generates an alert. 
+●​ Step 5.5: Amount Verification: The agent compares the amount the operative is claiming against the 
+agreed price-work value for that fix on that plot type (from the Labour Prices sheet generated in 
+Module 2). If the operative is claiming more than the allowed amount, the agent flags the 
+discrepancy. If they are claiming less (e.g., partial completion), the agent logs it as a partial claim. 
+●​ Step 5.6: Day Work Handling: For operatives working on hourly rates or day rates (common on larger 
+communal area installations and for apprentices), the agent extracts the hours claimed and verifies 
+there is an accompanying daywork sheet reference. If no daywork reference exists for hourly work, 
+the agent flags the item to be reverted back to the operative. Validated day work is logged against 
+the communal labour budget rather than the plot-based labour tab. 
+●​ Step 5.7: Discrepancy Report: For any line items that fail validation (duplicate claims, overcharges, 
+unrecognised site codes, amount mismatches, missing daywork references), the agent compiles a 
+discrepancy report and emails it to the finance team. Each flagged item includes the operative's 
+name, employee reference, the claim details, and the specific reason for rejection. 
+●​ Step 5.8: Labour Tab Population: For all validated claims, the agent inputs the operative's initials and 
+the claimed amount into the correct cell on the master 'LABOUR' tab for the relevant project 
+application spreadsheet. This automatically feeds into the main application sheet (as the labour tab is 
+linked to the application). 
+●​ Step 5.9: Wages Summary Update: The agent simultaneously updates the individual operative's tab 
+on the master JWE Wages Summary spreadsheet (e.g., the 'Alex Hanley' tab, the 'Andy Bond' tab). It 
+enters the site codes, plot numbers, and amounts under the correct week-ending date columns, 
+maintaining the existing 81-row x 22-column structure per operative. 
+●​ Step 5.10: Summary Tab Aggregation: The agent updates the master 'Summary' tab on the Wages 
+Summary, ensuring the Total Gross, Standard Hours, Price Work, Holiday/ROP, Bank Holiday pay, 
+Phone, Van, and Mileage columns are all correctly aggregated for each operative. It also updates the 
+'Timesheet Checklist' tab to confirm receipt and processing. 
+●​ Step 5.11: EQUE2 Preparation: The agent compiles all validated timesheet data into the exact format 
+required for direct entry into the EQUE2 payroll system, which feeds through to Sage Payroll. This 
+includes the gross pay breakdown, salary sacrifice pension deductions, and the net payable amount 
+per operative. 
+●​ Step 5.12: Performance Analytics: The agent continuously logs completion data against historical 
+averages. It flags management if specific operatives are consistently taking longer on comparable 
+plots or house types (e.g., if Operative A is claiming 2nd Fix on a Crocus in 2 days but the average is 
+1.5 days). It also flags if certain plot types are proving more expensive in labour than the tender 
+allowed. This data feeds back into Module 2 for future tender pricing accuracy. 
+●​ Step 5.13: Underpayment & Overpayment Alerts: If the cumulative labour spend on a project is 
+tracking significantly above or below the tendered labour allowance, the agent sends a proactive 
+alert to the commercial team, enabling early intervention rather than discovering the issue at project 
+completion. 
+Module 6: Material Spend Tracking & Discrepancy Detection 
+●​ Trigger: A supplier emails their monthly Excel statement or invoice breakdown to the finance inbox, 
+or the file is uploaded to the designated SharePoint folder. 
+
+
+=== PAGE 11 ===
+●​ Step 6.1: Statement Ingestion & Normalisation: The agent ingests the Excel statement from the 
+supplier using the same OCR-first approach as Module 5. Because each of the six suppliers uses 
+different column formats (e.g., Templegate uses 15 columns with DATE, NUMBER, CODE, 
+DESCRIPTION, QTY, PRICE, PER, DISC, SELL, SELLING, and ORDER REF; Eddis & Walsall uses 7 columns; 
+KEW uses 17 columns with separate Disc% and Value fields; Medlock uses 9 columns), the agent 
+normalises all formats into a standard structure. We will need sample statements from each supplier 
+upfront to map the column structures before building the ingestion logic. 
+●​ Step 6.2: Order Reference Parsing & Normalisation: The agent reads the order reference on each 
+line item (e.g., '2145 11 LLANYRNEWYDD', '2226/STONEWOOD RETURN', 'TW NAILSEA', '2168 PV') 
+and maps it to the correct project site code, plot number, and fix type. Where operatives or site 
+foremen have used inconsistent formatting, the agent applies normalisation logic to resolve the 
+reference. 
+●​ Step 6.3: Project Spend Allocation: The agent allocates each line item to the correct project in the 
+master Project Spend Tracker. It logs the material cost against the specific project, building a 
+cumulative spend picture. 
+●​ Step 6.4: Price Verification: The agent cross-references the charged unit price on each line item 
+against the agreed tender price established with the chosen supplier in Module 3. If the supplier has 
+charged a higher price than agreed (e.g., due to an unapproved price increase), the agent flags the 
+item with the exact financial impact calculated. 
+●​ Step 6.5: Discount Verification: The agent checks that the correct discount percentage has been 
+applied to each line item. Suppliers sometimes fail to apply the agreed discount, resulting in 
+overcharges. For example, if KEW has agreed a 70% discount on cable glands but only applied 65%, 
+the agent flags the difference and calculates the financial impact. 
+●​ Step 6.6: Quantity Monitoring: The agent compares the cumulative quantity of each item purchased 
+for the project against the total quantity allowed in the original takeoff. If the site has ordered 150 
+double sockets but the takeoff only allowed for 120, the agent flags the overrun and calculates the 
+cost of the excess. 
+●​ Step 6.7: Unrecognised Purchase Detection: The agent identifies any line items with order references 
+that do not match a known project or plot. These are flagged as potential unauthorised purchases 
+(e.g., operatives buying materials for personal use on the company account). The agent generates a 
+separate alert for these items. 
+●​ Step 6.8: Returns & Credits Processing: The agent identifies negative quantities (returns) in the 
+supplier statements and reconciles them to ensure the project spend is accurately reduced. It tracks 
+handling charges on returns and ensures they are accounted for. 
+●​ Step 6.9: Monthly Exception Report: The agent generates a comprehensive monthly exception 
+report for the finance team, organised by project. The report includes: items charged above the 
+agreed rate, missing or incorrect discounts (with the exact financial impact), quantity overruns by 
+item, unrecognised or suspicious purchases, and a project-level summary comparing total material 
+spend to date against the tendered material allowance. 
+●​ Step 6.10: Supplier Credit Note Tracking: When the finance team reverts back to the supplier for a 
+credit based on the exception report, the agent tracks the outstanding credit notes and reconciles 
+them against subsequent statements to ensure the credits are actually applied. 
+●​ Step 6.11: Profitability Dashboard Update: The agent updates the project profitability view, 
+combining the material spend data from this module with the labour spend data from Module 5, 
+
+
+=== PAGE 12 ===
+giving the commercial team a real-time view of actual costs vs. tendered allowances for every live 
+project. 
+Module 7: Application Template Generation & Monthly Invoicing 
+●​ Trigger: A project is confirmed as won and marked as 'Awarded' in the system. 
+●​ Step 7.1: Application Template Creation: The agent takes the final tender revision spreadsheet and 
+automatically generates the Main Application spreadsheet (e.g., 'JWES Main Contract Application'). It 
+creates the SUMMARY tab with the Account Summary, the JWES Application tab with the formal 
+interim application letter format, and the Main Application tab populated with every plot number, 
+house type, and the agreed value per fix stage (1st Fix, 2nd Fix, Finals, Garages, Car Charging). 
+●​ Step 7.2: Fix Stage Percentage Setup: The agent sets up the tracking columns for each fix stage, 
+configuring the spreadsheet to track percentage completion (0 to 1) and monetary value claimed to 
+date. The percentage split between fix stages is configurable and stored centrally. 
+●​ Step 7.3: Communal Area Setup: For flat developments, the agent sets up the communal area 
+section below the flat plots, with percentage-based claiming for each communal work package 
+(Containment, Lighting, Small Power, Distribution, AOV, Door Entry, etc.). 
+●​ Step 7.4: Variations Tab Setup: The agent creates the 'Variations to Contract' tab, pre-formatted with 
+columns for Item number, Plot, Description, Order Number/Ref, Works Value, % Complete, Claimed 
+to Date, Paid, Outstanding, and Notes. This is ready to receive variation entries as they arise during 
+the project. 
+●​ Step 7.5: Labour Tab Setup: The agent creates the 'LABOUR' tab, pre-populated with every plot 
+number and fix stage from the tender, ready to receive operative timesheet data from Module 5. 
+●​ Step 7.6: Monthly Template Duplication: At the start of each application period, the agent 
+automatically creates the new month's application (e.g., moving from Application 19 to Application 
+20). It copies the 'Gross Claimed to Date' figures into the 'Previous Claim' column, resetting the 
+current month's claim to zero, ready for the contracts manager to update. 
+●​ Step 7.7: Contracts Manager Input Workflow: The agent sends the current month's template to the 
+relevant contracts manager(s), requesting them to update the percentage complete for each plot and 
+fix stage. When the contracts manager returns the updated sheet, the agent ingests the highlighted 
+plots and updated percentages. 
+●​ Step 7.8: Claim Calculation: The agent calculates the current month's claim value based on the newly 
+updated completion percentages. It produces the Gross Valuation, less Previous Valuations, to arrive 
+at the Valuation This Month figure. It also calculates the Net Balance Due after deducting amounts 
+already paid. 
+●​ Step 7.9: Variation Logging: As new variations arise during the project (e.g., customer extras like 
+additional USB sockets at £54 per plot, drawing error corrections backed by daywork sheets like 'DW 
+5165', return visits, or compound works), the agent logs each one into the 'Variations to Contract' tab 
+with the description, agreed value, order reference, and claim status. 
+●​ Step 7.10: Client-Specific Timing: The agent manages different application submission dates per 
+client. For clients requiring actuals (e.g., 28th of the month), it only includes confirmed completions. 
+For clients requiring projections (e.g., 19th with month-end valuation), it includes confirmed 
+completions plus projected works based on the contracts manager's forecast. It also tracks the 'Final 
+Date for Payment' for each application. 
+
+
+=== PAGE 13 ===
+●​ Step 7.11: Invoice Generation: The agent generates the formal Interim Application letter (the 'JWES 
+Application' tab), populating the FAO, project name, application number, application date, period 
+ending date, order number, Forecast Final Account, Contract Works value, Extras/Variations value, 
+Gross Application, Less Paid to Date, and Net Balance Due. This is formatted ready for submission to 
+the client. 
+ 
+7. Training and Handover 
+Upon completion of the build, we will conduct a full training and handover session. This is not about 
+learning a new system, but about learning how to work with your new digital commercial assistant. We 
+will cover: 
+●​ How to structure and upload architectural drawing packs into the SharePoint folder to ensure the AI 
+vision model extracts data perfectly, including best practices for file naming and folder organisation. 
+●​ How to review and approve the AI's takeoff output before it feeds into the pricing stages, including 
+how to spot-check quantities and override where needed. 
+●​ How to manage the human-in-the-loop checkpoints, specifically reviewing the AI's suggested labour 
+pricing and using the supplier negotiation flags to secure better deals. 
+●​ How to review the automated discrepancy reports for handwritten timesheets and supplier invoices, 
+and how to action the exception items efficiently. 
+●​ Best practices for standardising operative timesheet submissions to ensure maximum OCR processing 
+accuracy, and how the data flows through to EQUE2 and Sage Payroll. 
+●​ How to use the project profitability dashboard to monitor live projects against tendered allowances 
+in real time. 
+●​ How the revision management system works for tender resubmissions and how to instruct the agent 
+to create new revisions. 
+●​ How to update the stored parameters (markup percentages, supplier rebate rates, labour times) as 
+the business evolves. 
+ 
+
+

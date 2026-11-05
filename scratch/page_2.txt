@@ -1,0 +1,42 @@
+2 ===
+operatives, check them against allowed budgets per fix stage, enter the data into EQUE2, and 
+painstakingly review hundreds of supplier invoice line items to catch overcharges or missing discounts. 
+This manual dependency creates a cascade of further inefficiencies: 
+●​ Estimating Bottlenecks & Capacity Constraints: The time-intensive nature of manual drawing 
+takeoffs means estimators spend hours counting symbols on architectural elevations and floor plans 
+rather than strategising on pricing or negotiating better rates. This limits the volume of tenders the 
+business can accurately process. 
+●​ Margin Erosion through Pricing Errors: Manually comparing supplier quotes across six different 
+spreadsheet formats and tracking volatile material prices leaves room for human error. Furthermore, 
+when suppliers fail to apply agreed discounts on their monthly invoices, the manual checking process 
+often misses these discrepancies, leading to direct financial loss. 
+●​ Labour Tracking Inaccuracies: Processing handwritten PDF timesheets manually and 
+cross-referencing them against the complex labour tab (which splits pricing across 10 categories like 
+Ducting, 1st Fix, Finals, and EV Chargers) is highly prone to error. Operatives using inconsistent 
+wording or claiming for plots that have already been paid can easily slip through, resulting in 
+overpayments and skewed project profitability data. 
+●​ Lack of Performance Visibility: Because the data is locked in disparate spreadsheets, PDFs, and 
+EQUE2, it is incredibly difficult to identify trends, such as which operatives consistently take longer on 
+specific house types, or which plots are consistently underpriced at the tender stage. 
+ 
+3. The Solution: A Bespoke AI Commercial Assistant 
+We will build a bespoke AI-powered digital assistant that operates directly across your existing estimating 
+and commercial workflows. This is not a new software platform to learn; it is an intelligent agent that 
+performs the heavy lifting of data extraction, comparison, and tracking within the tools you already use, 
+including Monday.com, EQUE2, Sage, and your highly structured Excel workbooks. 
+The automation will utilise advanced AI vision capabilities (specifically GPT-4o Vision) to read full 
+architectural PDF packs, identify the relevant floor plans, and automatically perform component takeoffs. 
+It will standardise the supplier quoting process, intelligently comparing returns from all six of your regular 
+suppliers to secure the best margins. Once a project is live, the agent will use a dedicated OCR engine to 
+process handwritten operative timesheets, allocate costs to the correct plots and fix stages, prepare the 
+data for EQUE2, and meticulously scan supplier statements to flag overcharges or anomalies. It acts as a 
+tireless commercial guardian, protecting your margins and freeing your human team to focus on strategic 
+project management and negotiation. 
+Proof of Concept: AI Vision Takeoff 
+To demonstrate the capability of the AI vision model, we ran a sample architectural electrical plan 
+through the system. This was a standard residential floor plan with BS 1192 / IEC electrical symbols. The 
+AI successfully identified the rooms, counted the components, and produced a structured output without 
+any human intervention or pre-configuration. 
+AI Output Example (Sample House Type): 
+
+

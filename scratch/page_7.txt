@@ -1,0 +1,46 @@
+7 ===
+●​ Step 2.2: Labour Calculation (Houses): For each house type, the agent calculates the base labour 
+cost broken down by the 10 standard Jeffway categories: Ducting, 1st Fix, 2nd Fix, Finals & Heating, 
+Fit Appliances, Weather Compensator, 20mm Condensate Pipe, Test, EV Charger, and Garages. The 
+calculation is based on the total component count for that house type multiplied by the standard 
+labour time, then multiplied by the agreed rate. 
+●​ Step 2.3: Labour Calculation (Communal): For communal areas in flat developments, the agent 
+calculates labour costs by section (Containment, Lighting, Small Power, Distribution, AOV, Door Entry, 
+etc.), using the agreed hourly rate (e.g., £20/hour as per the existing Communals tab) multiplied by 
+the estimated hours per section. It produces both a per-section cost and a total communal labour 
+package figure. 
+●​ Step 2.4: Historical Comparison: The agent compares the calculated labour price against actual costs 
+from previous projects of similar size and complexity. If the calculated figure deviates significantly 
+from historical actuals (e.g., the tender says £400 per 1st Fix for a Crocus but previous actuals 
+averaged £450), the agent flags this for the estimator's attention with a clear recommendation. 
+●​ Step 2.5: Markup Application: The agent applies the standard commercial markups to generate the 
+final tender labour price. Based on the existing Jeffway structure, this includes the Labour Markup of 
+26.5% (NI & Holidays), Office Overhead of 14%, and Net Profit Margin of 9.9%. These percentages are 
+stored centrally and can be updated at any time. 
+●​ Step 2.6: Operative Pricing Sheet Generation: The agent generates the 'Labour Prices' sheet that will 
+be issued to operatives on site. This lists every plot number, house type, tenure (OM/Affordable), 
+specification (Gold/Silver/Shared Ownership/Rented), and the agreed price-work value for each of 
+the 10 fix stage categories. This is the sheet the lads use to know what they get paid per plot per fix. 
+●​ Step 2.7: Margin Pot Calculation: The agent calculates the difference between the labour figure 
+included in the tender (what the client pays) and the price-work figure issued to operatives (what the 
+lads get paid), highlighting the retained margin per plot and per fix stage. This gives the commercial 
+team instant visibility of the labour margin pot. 
+●​ Step 2.8: Human Override Checkpoint: The agent highlights the suggested labour pricing in the 
+spreadsheet, pausing the workflow to allow the estimator to review and adjust for known complexity 
+factors (e.g., three-storey properties, difficult access, non-standard layouts, timber frame vs. masonry 
+differences). The estimator provides final approval before the workflow proceeds. 
+Module 3: Supplier Quoting & Comparison 
+●​ Trigger: The estimator approves the material quantities and labour pricing from Modules 1 and 2. 
+●​ Step 3.1: Quote Request Generation: The agent extracts the consolidated material list from the 
+master spreadsheet and generates standardised Excel quote request forms. The forms include 
+product descriptions, manufacturer product codes (e.g., Deta SD1209CHW for a 2G Switched Socket), 
+and required quantities, with the unit cost column left blank for the supplier to complete. 
+●​ Step 3.2: Supplier Selection & Dispatch: The agent references the stored supplier list to identify the 
+designated wholesalers for this project. While three suppliers is the standard approach, the agent can 
+dispatch to up to six (from the pool of Templegate, Eddis & Walsall, KEW, Medlock, Moss, and Rexel) 
+if requested. The agent automatically emails the quote requests to all selected wholesalers, 
+requesting pricing to be returned in the provided format within a specified timeframe. 
+●​ Step 3.3: Quote Ingestion & Format Normalisation: As suppliers return their completed sheets (via 
+email), the agent ingests each response. Because each supplier uses different column formats (e.g., 
+
+

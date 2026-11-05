@@ -1,0 +1,44 @@
+4 ===
+Margin Protection & Cost Control 
+Automated invoice checking ensures that every 
+supplier overcharge, missed discount, or 
+unauthorised purchase is immediately flagged. 
+This directly protects project margins by 
+preventing value leakage across the 130,000+ 
+material lines processed annually. 
+Enhanced Accuracy & Consistency 
+Removing human data entry from the takeoff and 
+timesheet allocation processes eliminates 
+transcription errors, ensuring that tenders are 
+perfectly accurate and operatives are paid 
+correctly for the exact fix stage completed. 
+Performance Analytics 
+By digitising the timesheet and labour tracking 
+process, the business gains instant visibility into 
+operative performance, allowing management to 
+identify inefficiencies and adjust future tender 
+pricing accordingly. 
+Accelerated Quoting Lifecycle 
+The time from logging a tender to submitting a 
+fully priced proposal will be dramatically reduced. 
+Automated takeoffs and instant multi-supplier 
+quote comparisons accelerate the entire 
+estimating cycle. 
+ 
+5. Implementation Notes 
+Our investigation confirms that the core workflow relies on complex architectural PDF packs, handwritten 
+PDF timesheets, and highly structured, multi-tab Excel spreadsheets. The automation will therefore be 
+built using a two-step approach for document reading: a dedicated OCR engine (such as Google 
+Document AI or Azure Document Intelligence) to extract the text first, then passing it to GPT-4o Vision for 
+normalisation, spatial understanding, and logic. This two-step approach gives significantly better accuracy 
+than vision alone, especially on handwritten timesheets or dense architectural elevations. AI vision 
+models are very capable at reading architectural drawings and counting electrical components, and this is 
+well-established technology (dedicated tools like Drawer AI already do this commercially with up to 70% 
+time savings), so we are confident in the approach. 
+We will establish a dedicated SharePoint or OneDrive folder structure to act as the trigger point for new 
+tender uploads. The AI will be trained to recognise your specific spreadsheet formats (including the 
+173-row Communals tab and the 10-category Labour Prices sheet) to ensure seamless data population. 
+Crucially, tasks requiring commercial negotiation or final sign-off (such as challenging a supplier on price 
+or approving a final tender letter) are explicitly preserved as human-in-the-loop checkpoints. 
+
+

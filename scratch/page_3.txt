@@ -1,0 +1,114 @@
+3 ===
+Room 
+Recessed 
+Downlights 
+(R) 
+Ceiling 
+Pendants 
+Double 
+Sockets 
+Single 
+Sockets 
+Light 
+Switches 
+DP Switches 
+($) 
+Cooker 
+Switch ($$) 
+Living Room 
+14 
+1 
+5 
+0 
+2 
+0 
+0 
+Kitchen 
+0 
+3 
+4 
+0 
+2 
+2 
+1 
+Bedroom 1 
+0 
+1 
+3 
+0 
+1 
+0 
+0 
+Bedroom 2 
+2 
+1 
+3 
+0 
+2 
+0 
+0 
+Bedroom 3 
+2 
+1 
+2 
+0 
+1 
+0 
+0 
+Study 
+2 
+1 
+3 
+0 
+2 
+1 
+0 
+WC (Main) 
+1 
+0 
+1 
+0 
+1 
+1 
+0 
+WC 
+(En-suite) 
+1 
+0 
+0 
+0 
+1 
+0 
+0 
+Totals 
+22 
+8 
+21 
+0 
+12 
+4 
+1 
+ 
+Additional Items Detected: 
+●​ 1x Consumer Unit / Distribution Board (top-left corridor entry point) 
+●​ 6x Circuit wiring runs identified (colour-coded: lighting, ring main, cooker, shower, etc.) 
+●​ Smoke / heat detector positions identified at key locations 
+This output is exactly the data required to populate the specific house type tabs (e.g., Giganti, Crocus, 
+Conte) in the Jeffway estimating spreadsheet. The AI reads the plan, counts the components, sections 
+them by room, and produces a structured output that can be dropped directly into the existing workflow. 
+ 
+4. Expected Impact & Quantifiable Value 
+The implementation of this automation will deliver immediate, measurable, and substantial returns 
+across your commercial operations. 
+Area of Impact 
+Benefit & Value Proposition 
+Time Saving & Capacity Creation 
+Estimators and commercial administrators will 
+reclaim hundreds of hours per month currently 
+spent counting symbols on 46-page drawing packs 
+and transcribing handwritten timesheets into 
+EQUE2. This time will be redirected to pricing 
+more tenders and managing live projects 
+proactively. 
+
+

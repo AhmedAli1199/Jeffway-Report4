@@ -1,0 +1,30 @@
+13 ===
+●​ Step 7.11: Invoice Generation: The agent generates the formal Interim Application letter (the 'JWES 
+Application' tab), populating the FAO, project name, application number, application date, period 
+ending date, order number, Forecast Final Account, Contract Works value, Extras/Variations value, 
+Gross Application, Less Paid to Date, and Net Balance Due. This is formatted ready for submission to 
+the client. 
+ 
+7. Training and Handover 
+Upon completion of the build, we will conduct a full training and handover session. This is not about 
+learning a new system, but about learning how to work with your new digital commercial assistant. We 
+will cover: 
+●​ How to structure and upload architectural drawing packs into the SharePoint folder to ensure the AI 
+vision model extracts data perfectly, including best practices for file naming and folder organisation. 
+●​ How to review and approve the AI's takeoff output before it feeds into the pricing stages, including 
+how to spot-check quantities and override where needed. 
+●​ How to manage the human-in-the-loop checkpoints, specifically reviewing the AI's suggested labour 
+pricing and using the supplier negotiation flags to secure better deals. 
+●​ How to review the automated discrepancy reports for handwritten timesheets and supplier invoices, 
+and how to action the exception items efficiently. 
+●​ Best practices for standardising operative timesheet submissions to ensure maximum OCR processing 
+accuracy, and how the data flows through to EQUE2 and Sage Payroll. 
+●​ How to use the project profitability dashboard to monitor live projects against tendered allowances 
+in real time. 
+●​ How the revision management system works for tender resubmissions and how to instruct the agent 
+to create new revisions. 
+●​ How to update the stored parameters (markup percentages, supplier rebate rates, labour times) as 
+the business evolves. 
+ 
+
+

@@ -1,0 +1,46 @@
+9 ===
+areas. The letter is drafted as a professional scope document that clearly communicates the value of 
+the proposal. 
+●​ Step 4.3: Inclusions Section: The agent drafts a detailed inclusions section listing everything Jeffway 
+is allowing for in the tender: specific consumer unit types, socket specifications (e.g., Deta Slimline 
+range), light fitting types, cable specifications, testing and certification, EV charging (if applicable), PV 
+connections (if applicable), ASHP connections, and any specialist installations. This section is 
+comprehensive enough that there is no ambiguity about what is covered. 
+●​ Step 4.4: Exclusions & Qualifications: Based on the discrepancies flagged in Step 1.12 and standard 
+company policy, the agent drafts the specific exclusions (items not included in the price) and 
+qualifications (assumptions made, e.g., 'quotation based on specification Rev D dated [date]'). This 
+protects Jeffway commercially by making the scope crystal clear. 
+●​ Step 4.5: Tender Summary Sheet: The agent ensures the final 'Tender' summary tab in the 
+spreadsheet is perfectly formatted for client submission, showing house types, plot counts, total 
+value, cost per plot (with markups), materials per plot, and labour per plot. 
+●​ Step 4.6: PDF Conversion & Storage: The agent saves the drafted Word document, converts a copy to 
+PDF, and stores both alongside the final spreadsheet in the project's SharePoint folder, labelled as 
+Revision A. 
+●​ Step 4.7: Revision Management: When the developer requests changes (e.g., 'you're too expensive, 
+can you do it for less?'), the estimator instructs the agent to create a new revision. The agent 
+duplicates the spreadsheet and tender letter, applies the requested adjustments (tweaked labour 
+rates, updated supplier buy-in, revised markups), and saves as Revision B, C, D, etc. Each revision is 
+stored alongside the previous versions for a full audit trail. 
+●​ Step 4.8: Submission Notification: The agent notifies the estimator that the tender pack 
+(spreadsheet + letter + PDF) is ready for submission, with a link to the SharePoint folder. 
+Module 5: Timesheet Processing & Labour Tracking 
+●​ Trigger: An operative emails their weekly handwritten PDF timesheet to the Contracts Manager, who 
+checks and approves it before forwarding to the finance inbox. 
+●​ Step 5.1: OCR Data Extraction: The agent uses a dedicated OCR engine (such as Google Document AI 
+or Azure Document Intelligence) to read the handwritten PDF timesheet. It extracts the operative's 
+name, employee reference (e.g., JWE262), site code (e.g., 2168 Ph6), plot numbers, descriptions of 
+work, and the hours or price-work amount claimed for each line item. The two-step OCR-then-GPT 
+approach gives significantly better accuracy than vision alone on handwritten or inconsistently 
+formatted timesheets. 
+●​ Step 5.2: Terminology Normalisation: The agent passes the OCR text to GPT-4o to normalise 
+inconsistent wording. For example, 'PL2' is mapped to 'Plot 2', 'finals' is mapped to 'Finals & Heating', 
+and abbreviations are resolved against the project's known 10 fix types (Ducting, 1st Fix, 2nd Fix, 
+Finals & Heating, Fit Appliances, Weather Compensator, 20mm Condensate Pipe, Test, EV Charger, 
+Garages). 
+●​ Step 5.3: Site Code Validation: The agent verifies that the site code on the timesheet matches a live 
+project in the system (cross-referencing against the 'Current Works' tab in the Wages Summary). If 
+the site code is unrecognised, the line item is flagged for manual review. 
+●​ Step 5.4: Plot & Fix Availability Check: The agent checks the master 'LABOUR' tab for the relevant 
+project to confirm that the specific plot and fix type have not already been claimed by another 
+
+

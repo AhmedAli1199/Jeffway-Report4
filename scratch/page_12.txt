@@ -1,0 +1,45 @@
+12 ===
+giving the commercial team a real-time view of actual costs vs. tendered allowances for every live 
+project. 
+Module 7: Application Template Generation & Monthly Invoicing 
+●​ Trigger: A project is confirmed as won and marked as 'Awarded' in the system. 
+●​ Step 7.1: Application Template Creation: The agent takes the final tender revision spreadsheet and 
+automatically generates the Main Application spreadsheet (e.g., 'JWES Main Contract Application'). It 
+creates the SUMMARY tab with the Account Summary, the JWES Application tab with the formal 
+interim application letter format, and the Main Application tab populated with every plot number, 
+house type, and the agreed value per fix stage (1st Fix, 2nd Fix, Finals, Garages, Car Charging). 
+●​ Step 7.2: Fix Stage Percentage Setup: The agent sets up the tracking columns for each fix stage, 
+configuring the spreadsheet to track percentage completion (0 to 1) and monetary value claimed to 
+date. The percentage split between fix stages is configurable and stored centrally. 
+●​ Step 7.3: Communal Area Setup: For flat developments, the agent sets up the communal area 
+section below the flat plots, with percentage-based claiming for each communal work package 
+(Containment, Lighting, Small Power, Distribution, AOV, Door Entry, etc.). 
+●​ Step 7.4: Variations Tab Setup: The agent creates the 'Variations to Contract' tab, pre-formatted with 
+columns for Item number, Plot, Description, Order Number/Ref, Works Value, % Complete, Claimed 
+to Date, Paid, Outstanding, and Notes. This is ready to receive variation entries as they arise during 
+the project. 
+●​ Step 7.5: Labour Tab Setup: The agent creates the 'LABOUR' tab, pre-populated with every plot 
+number and fix stage from the tender, ready to receive operative timesheet data from Module 5. 
+●​ Step 7.6: Monthly Template Duplication: At the start of each application period, the agent 
+automatically creates the new month's application (e.g., moving from Application 19 to Application 
+20). It copies the 'Gross Claimed to Date' figures into the 'Previous Claim' column, resetting the 
+current month's claim to zero, ready for the contracts manager to update. 
+●​ Step 7.7: Contracts Manager Input Workflow: The agent sends the current month's template to the 
+relevant contracts manager(s), requesting them to update the percentage complete for each plot and 
+fix stage. When the contracts manager returns the updated sheet, the agent ingests the highlighted 
+plots and updated percentages. 
+●​ Step 7.8: Claim Calculation: The agent calculates the current month's claim value based on the newly 
+updated completion percentages. It produces the Gross Valuation, less Previous Valuations, to arrive 
+at the Valuation This Month figure. It also calculates the Net Balance Due after deducting amounts 
+already paid. 
+●​ Step 7.9: Variation Logging: As new variations arise during the project (e.g., customer extras like 
+additional USB sockets at £54 per plot, drawing error corrections backed by daywork sheets like 'DW 
+5165', return visits, or compound works), the agent logs each one into the 'Variations to Contract' tab 
+with the description, agreed value, order reference, and claim status. 
+●​ Step 7.10: Client-Specific Timing: The agent manages different application submission dates per 
+client. For clients requiring actuals (e.g., 28th of the month), it only includes confirmed completions. 
+For clients requiring projections (e.g., 19th with month-end valuation), it includes confirmed 
+completions plus projected works based on the contracts manager's forecast. It also tracks the 'Final 
+Date for Payment' for each application. 
+
+

@@ -1,0 +1,44 @@
+5 ===
+Note: The investment figures detailed in Section 8 cover the design, build, and implementation of the 
+automation. The ongoing API usage costs for the AI vision and OCR models are not included and will be 
+billed as a running monthly operational cost based on usage volume. 
+ 
+6. Full, Unabridged Automation Breakdown 
+This section details every step the AI agent will perform. This is the definitive scope of work. 
+Module 1: AI-Powered Electrical Plan Takeoff 
+●​ Trigger: An estimator uploads a new tender pack (architectural PDFs and specifications) into a 
+designated 'New Tenders' SharePoint folder, and the project is logged in the new build pipeline. 
+●​ Step 1.1: Document Parsing & Page Identification: The agent scans the uploaded architectural packs 
+(often 40+ pages per house type, including substructure plans, setting out plans, joists plans, roof 
+plans, elevations, sections, and schedules). It intelligently identifies and extracts only the relevant 
+floor plans (e.g., 'Ground Floor Setting Out', 'First Floor Setting Out') while ignoring elevations, roof 
+truss details, staircase details, and substructure plans that do not contain electrical data. It also reads 
+the cover sheet to identify the house type name, the applicable plots, the specification level (e.g., 
+Lovell Gold, Lovell Silver, Shared Ownership, Rented), and whether the build is Masonry or Timber 
+Frame. 
+●​ Step 1.2: Symbol Key Detection: If the tender pack includes a symbol legend or key, the agent ingests 
+it and maps each symbol to a component category. If no key is provided, the agent defaults to the 
+standard BS 1192 / IEC electrical symbol library. The estimator can supply a custom key at any time, 
+which the agent will store for future use with that developer or architect. 
+●​ Step 1.3: AI Vision Extraction (Houses): For standard housing plots, the agent processes the 
+identified floor plans for each house type (e.g., Giganti, Crocus, Conte, Lunaria, Violet). Using GPT-4o 
+Vision, it scans the plan room-by-room, counting every electrical component: single sockets, double 
+sockets, USB sockets, fused spur units, light switches (1-gang, 2-gang, 3-gang, dimmer), ceiling 
+pendants, recessed downlights, extractor fans, cooker switches, cooker control units, double-pole 
+switches, consumer units, MCBs, RCBOs, smoke detectors, heat detectors, CO detectors, shaver 
+sockets, TV plates, data plates, oven connections, hob connections, ASHP connections, EV charger 
+points, and any PV connections. Each item is logged against the room it appears in. 
+●​ Step 1.4: AI Vision Extraction (Flats): For flat developments, the agent processes each flat type 
+drawing individually (e.g., Apartment M1A GF, Apartment M1B GF, Apartment M1C FF), performing 
+the same room-by-room component count as Step 1.3. Each flat type is treated as a distinct unit with 
+its own takeoff. The agent also identifies the floor level (Ground Floor, First Floor, Second Floor) for 
+each flat type. 
+●​ Step 1.5: Communal Area Separation: For blocks of flats, the agent identifies and separates 
+communal areas (entrance lobbies, corridors, stairwells, landings, bin stores, cycle stores, plant 
+rooms, retail units) from individual apartments. Communal components are logged into their own 
+dedicated section, broken down by floor and area. This includes communal lighting (emergency and 
+standard), small power (landlord sockets), distribution boards, submains cabling, containment (cable 
+tray, basket, trunking), TV aerial distribution, door entry and intercom systems, fire alarm devices, 
+and AOV (Automatic Opening Vent) systems. 
+
+

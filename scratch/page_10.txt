@@ -1,0 +1,46 @@
+10 ===
+operative. If the cell is already populated with another operative's initials, the agent flags this as a 
+potential duplicate claim and generates an alert. 
+●​ Step 5.5: Amount Verification: The agent compares the amount the operative is claiming against the 
+agreed price-work value for that fix on that plot type (from the Labour Prices sheet generated in 
+Module 2). If the operative is claiming more than the allowed amount, the agent flags the 
+discrepancy. If they are claiming less (e.g., partial completion), the agent logs it as a partial claim. 
+●​ Step 5.6: Day Work Handling: For operatives working on hourly rates or day rates (common on larger 
+communal area installations and for apprentices), the agent extracts the hours claimed and verifies 
+there is an accompanying daywork sheet reference. If no daywork reference exists for hourly work, 
+the agent flags the item to be reverted back to the operative. Validated day work is logged against 
+the communal labour budget rather than the plot-based labour tab. 
+●​ Step 5.7: Discrepancy Report: For any line items that fail validation (duplicate claims, overcharges, 
+unrecognised site codes, amount mismatches, missing daywork references), the agent compiles a 
+discrepancy report and emails it to the finance team. Each flagged item includes the operative's 
+name, employee reference, the claim details, and the specific reason for rejection. 
+●​ Step 5.8: Labour Tab Population: For all validated claims, the agent inputs the operative's initials and 
+the claimed amount into the correct cell on the master 'LABOUR' tab for the relevant project 
+application spreadsheet. This automatically feeds into the main application sheet (as the labour tab is 
+linked to the application). 
+●​ Step 5.9: Wages Summary Update: The agent simultaneously updates the individual operative's tab 
+on the master JWE Wages Summary spreadsheet (e.g., the 'Alex Hanley' tab, the 'Andy Bond' tab). It 
+enters the site codes, plot numbers, and amounts under the correct week-ending date columns, 
+maintaining the existing 81-row x 22-column structure per operative. 
+●​ Step 5.10: Summary Tab Aggregation: The agent updates the master 'Summary' tab on the Wages 
+Summary, ensuring the Total Gross, Standard Hours, Price Work, Holiday/ROP, Bank Holiday pay, 
+Phone, Van, and Mileage columns are all correctly aggregated for each operative. It also updates the 
+'Timesheet Checklist' tab to confirm receipt and processing. 
+●​ Step 5.11: EQUE2 Preparation: The agent compiles all validated timesheet data into the exact format 
+required for direct entry into the EQUE2 payroll system, which feeds through to Sage Payroll. This 
+includes the gross pay breakdown, salary sacrifice pension deductions, and the net payable amount 
+per operative. 
+●​ Step 5.12: Performance Analytics: The agent continuously logs completion data against historical 
+averages. It flags management if specific operatives are consistently taking longer on comparable 
+plots or house types (e.g., if Operative A is claiming 2nd Fix on a Crocus in 2 days but the average is 
+1.5 days). It also flags if certain plot types are proving more expensive in labour than the tender 
+allowed. This data feeds back into Module 2 for future tender pricing accuracy. 
+●​ Step 5.13: Underpayment & Overpayment Alerts: If the cumulative labour spend on a project is 
+tracking significantly above or below the tendered labour allowance, the agent sends a proactive 
+alert to the commercial team, enabling early intervention rather than discovering the issue at project 
+completion. 
+Module 6: Material Spend Tracking & Discrepancy Detection 
+●​ Trigger: A supplier emails their monthly Excel statement or invoice breakdown to the finance inbox, 
+or the file is uploaded to the designated SharePoint folder. 
+
+

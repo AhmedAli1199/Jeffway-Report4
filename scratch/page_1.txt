@@ -1,0 +1,38 @@
+1 ===
+AI Automation Opportunity Report 4 
+Prepared for: Jeffway Construction Ltd    Prepared by: Cybix    Date: 23 March 2026 
+ 
+1. Overview 
+This report provides a definitive, fully-scoped breakdown of the AI-powered automation opportunity for 
+Jeffway Construction Ltd, specifically focusing on the electrical estimating, commercial tracking, and 
+labour processing lifecycle. The purpose of this document is to detail, in black and white, every step, 
+trigger, and action that will be built, ensuring complete clarity on the solution being delivered. This 
+automation is designed to act as a digital estimator and commercial assistant within your existing 
+infrastructure, seamlessly connecting your tender documents, supplier quotes, EQUE2 payroll system, 
+Monday.com pipeline, and financial tracking spreadsheets. 
+The primary business objective is to eliminate the significant administrative burden which currently 
+consumes the commercial and estimating teams, introduces pricing risks, and creates blind spots in 
+project profitability. By automating the repetitive, rules-based tasks of drawing takeoffs from complex 
+46-page architectural packs, multi-supplier price comparisons, PDF timesheet processing, and material 
+invoice checking, we will unlock substantial value, improve estimating accuracy, and ensure that every 
+project's profitability is protected from the tender stage right through to final completion. 
+Mini Report Note 
+I will add this is just a mini report, as there are a couple of automation workflows focused on the 
+commercial and estimating process, and we will do the same kind of style report as this for the other 
+sessions we have. In the full report, we'll have a look at your competitive market, different tools the team 
+can use internally, and lots more, but this should give you a bit of a flavour for this smaller automation 
+process. 
+ 
+2. The Problem: Current Process & Inefficiencies 
+Jeffway Construction's current process for electrical estimating and commercial tracking relies heavily on 
+manual data extraction and spreadsheet management. This creates a series of tangible business 
+challenges that directly impact commercial capacity and margin protection. 
+The core of the problem begins at the tender stage. When a tender pack estimators must manually 
+review extensive architectural drawing packs (often 40+ pages per house type), counting every single 
+socket, light fitting, and cable run by hand. This data is then manually transcribed into complex, multi-tab 
+spreadsheets separating 1st Fix, 2nd Fix, and Communals. The process of obtaining supplier quotes 
+involves sending out lists to up to six different suppliers (including Templegate, Medlock, and KEW), 
+waiting for returns in varying formats, and manually comparing line items. Once a project is won, the 
+burden shifts to the commercial team, who must manually process handwritten PDF timesheets from 
+
+

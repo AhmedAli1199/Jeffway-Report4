@@ -1,0 +1,53 @@
+# Environment & Secrets
+.env
+.env.local
+.env.*.local
+*.pem
+
+# Dependencies
+node_modules/
+frontend/node_modules/
+__pycache__/
+backend/**/__pycache__/
+*.py[cod]
+*$py.class
+.venv/
+venv/
+ENV/
+
+# Build & Bundler outputs
+frontend/dist/
+frontend/dist-ssr/
+*.local
+
+# Heavy tender pack PDFs (688 MB) - Store in Google Drive / external cloud storage
+# A working sample benchmark drawing is provided in backend/data/sample_blueprints/The Avebury.pdf
+Curo Tender Docs for AI/
+
+# Cache images & exports (temporary rendered page PNGs)
+backend/data/cache/*.png
+backend/data/exports/*
+!backend/data/cache/templates/
+!backend/data/cache/templates/*.png
+!backend/data/exports/.gitkeep
+
+# OS generated files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+__MACOSX/
+
+# IDE & Editor files
+.vscode/
+.idea/
+*.sublime-project
+*.sublime-workspace
+*.swp
+*.swo
+
+# Antigravity Brain & scratch artifacts
+.gemini/

@@ -1,0 +1,45 @@
+8 ===
+Templegate uses 15 columns including DATE, CODE, DESCRIPTION, QTY, PRICE, DISC, and SELL; Eddis 
+& Walsall uses 7 columns; KEW uses 17 columns with separate Disc% and Value fields), the agent 
+normalises all returns into a single, unified comparison structure. It validates that every line item has 
+been priced and flags any gaps or items marked as 'not available'. 
+●​ Step 3.4: Line-by-Line Comparison: The agent compares the unit prices line-by-line across all 
+returned quotes. It produces a comparison matrix showing each item, the quoted prices from each 
+supplier, and the percentage variance between them. 
+●​ Step 3.5: Rebate & Net Cost Calculation: The agent factors in any known annual or quarterly rebates 
+for each supplier (stored in the system and updated periodically). It calculates the true net cost per 
+supplier after rebates are applied, which may change the ranking. 
+●​ Step 3.6: Cable Price Volatility Check: For cable items specifically (which are known to fluctuate 
+significantly), the agent compares the quoted prices against the last three months of cable pricing 
+data from previous orders. If prices have moved significantly, it flags this to the estimator with a 
+recommendation on whether to lock in now or wait. 
+●​ Step 3.7: Best Package Recommendation: The agent identifies the most cost-effective supplier for 
+the overall package and presents a summary showing the total cost from each supplier (pre- and 
+post-rebate), along with a clear recommendation. 
+●​ Step 3.8: Human-in-the-Loop Negotiation Flag: The agent highlights specific line items where a 
+non-selected supplier is significantly cheaper (e.g., light switches at £1 from Supplier B vs. £3 from 
+the recommended Supplier A). It generates a negotiation brief for the commercial team, suggesting 
+they approach the preferred supplier to match on those specific items before confirming the order. 
+●​ Step 3.9: Specialist Item Routing: If certain items (e.g., specialist light fittings, solar PV mounting kits, 
+specific manufacturer products) are not stocked by the main wholesalers or are significantly cheaper 
+direct from the manufacturer, the agent flags these for separate procurement and excludes them 
+from the main package comparison. It can also route specialist items to sub-contractors for pricing 
+where required. 
+●​ Step 3.10: Final Population & Handover: Upon final supplier selection by the commercial team, the 
+agent populates the chosen unit prices into the master tender spreadsheet. It also generates the 
+second fix takeoff sheets per plot type that will be sent to the chosen supplier for order fulfilment 
+once the project is won. The agent advises finance/commercial of the agreed costs against the 
+takeoffs. 
+Module 4: Tender Document Generation 
+●​ Trigger: The master tender spreadsheet is fully populated and the estimator marks the tender as 
+'Ready for Submission'. 
+●​ Step 4.1: Data Extraction: The agent extracts the final pricing, quantities, plot types, material 
+specifications, supplier details, and labour allowances from the completed spreadsheet, including the 
+Accommodation Schedule data (plot numbers, house types, beds, tenure, specification, garage 
+types). 
+●​ Step 4.2: Tender Letter Drafting: The agent opens the standard Jeffway Tender Letter Word template 
+and maps the variables correctly. It populates the document with the specific project details, 
+including a section-by-section breakdown of allowances (Distribution, Containment, Lighting, Small 
+Power, etc.), the agreed rates, material markups, and total costs per house type and for communal 
+
+
