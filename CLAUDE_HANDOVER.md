@@ -119,13 +119,21 @@ Build a high-performance, human-in-the-loop AI Takeoff system capable of:
 - `data/sample_blueprints/The Avebury.pdf`: Canonical benchmark PDF (~3.1 MB) for testing.
 - `data/projects/proj_avebury_curo/state.json`: Master project state with verified legends, rooms, and markers.
 
-### 5.2 Frontend (`frontend/`)
-- `src/App.tsx`: Main application controller, project loading, auto-save (debounced 2.5s), legend management.
-- `src/components/canvas/BlueprintCanvas.tsx`: Konva HTML5 Canvas rendering vector markers, pan/zoom, room polygons, exclusion zones.
-- `src/components/toolbar/InstanceNavigator.tsx`: Floating reviewer bar (Previous/Next symbol, Approve (A), Delete (Del), Re-Run AI).
-- `src/components/sidebar/RightSidebar.tsx`: Real-time BoQ table, 1st Fix / 2nd Fix / Specialist stage breakdown, confidence slider.
-- `src/components/modals/AIAuditModal.tsx`: Stage 2 AI verification trigger & candidate inspection.
-- `src/components/modals/AIAuditLogModal.tsx`: Visual audit diagnostics modal showing full historical AI decisions and prompt reasoning.
+### 5.2 Frontend (`frontend/`) — "Plotline" UI (rebuilt Nov 2026)
+The design system, principles and product story live in `design/plotline-design-system.html`.
+- `src/state/useTakeoff.ts`: **All app state and every backend call** (load project, auto-count with same-symbol dedupe, review approve/reject with undo, AI check, legend-zone detection, rooms, plots, exports, debounced auto-save to `/api/takeoff/save-state`). Components never call the API directly.
+- `src/lib/api.ts`: Typed API client. Base URL from `VITE_API_BASE` (default `http://127.0.0.1:8008/api`).
+- `src/lib/types.ts`, `src/lib/util.ts`: Shared types; counting rule (`isCounted`: approved, AI-checked, or above the confidence slider).
+- `src/App.tsx`: Shell layout, collapsible/resizable panels, focus mode, theme (system/light/dark), keyboard shortcuts, command bar items.
+- `src/components/CanvasView.tsx`: Konva canvas — wheel/pinch zoom, pan, marks, rooms, excluded areas, crop/exclude/room/place tools, Paper/Blueprint rendering.
+- `src/components/Overlays.tsx`: Canvas toolbox, zoom + view controls, tool hints, progress bar, floating **review dock**.
+- `src/components/LeftPanel.tsx`: Sheets / Symbols / Rooms & excluded areas.
+- `src/components/Inspector.tsx`: Quantities (sheet / house / × plots), Plots & first-fix cable estimate (from `symbol_library.json` `cable_per_point_m`), AI log.
+- `src/components/Modals.tsx`: New symbol (after crop), AI check, Settings, Symbol library editor, Room name, Shortcuts.
+- `src/components/CommandPalette.tsx`: ⌘K / Ctrl+K command bar.
+- `src/styles.css`: Design tokens (light + dark) and all component styles. No CSS framework.
+
+Keyboard: A approve · X reject · J/K next/prev · ⇧J/⇧K next/prev sheet · V/M/C/E/R tools · ⇧C count selected symbol · [ ] panels · F focus · B blueprint · 0 fit · ⌘K command bar · ⌘S save · ? shortcuts.
 
 ---
 

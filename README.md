@@ -53,6 +53,10 @@ npm run dev -- --port 5174
 ```
 *Application available at: `http://localhost:5174/`*
 
+The frontend talks to the backend at `http://127.0.0.1:8008/api` by default. To point it elsewhere, copy `frontend/.env.example` to `frontend/.env` and set `VITE_API_BASE`.
+
+If no `Curo Tender Docs for AI/` folder is present, the app opens the committed benchmark `backend/data/sample_blueprints/The Avebury.pdf`.
+
 ---
 
 ## Project Structure

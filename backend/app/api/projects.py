@@ -6,7 +6,7 @@ import shutil
 import json
 import uuid
 
-from app.core.config import PROJECTS_DIR, BASE_DIR
+from app.core.config import PROJECTS_DIR, BASE_DIR, DATA_DIR
 from app.services.pdf_service import PDFService
 from app.services.master_excel_service import MasterExcelService
 
@@ -23,6 +23,11 @@ def get_sample_files() -> List[Path]:
                 continue
             if "The Avebury" in pdf.name:
                 sample_paths.append(pdf)
+    # Fall back to the benchmark PDF committed in the repo
+    if not sample_paths:
+        committed = DATA_DIR / "sample_blueprints" / "The Avebury.pdf"
+        if committed.exists():
+            sample_paths.append(committed)
     return sample_paths
 
 @router.get("/list")
