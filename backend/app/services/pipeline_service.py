@@ -609,7 +609,7 @@ def _merge_sheet(pid: str, page_index: int, clean: List[Dict[str, Any]], zone: O
 
         def near(n):
             ncx, ncy = n["x"] + n["width"] / 2, n["y"] + n["height"] / 2
-            r = max(30, max(n["width"], n["height"]) * 1.45)
+            r = 0.5 * max(n["width"], n["height"])  # same spot only: a second symbol drawn beside it is kept
             return any(
                 e["legend_id"] == n["legend_id"]
                 and ((e["x"] + e["width"] / 2 - ncx) ** 2 + (e["y"] + e["height"] / 2 - ncy) ** 2) ** 0.5 < r

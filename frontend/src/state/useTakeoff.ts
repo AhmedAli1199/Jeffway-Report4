@@ -417,7 +417,7 @@ export function useTakeoff() {
         const fresh = found.filter((n) => {
           const ncx = n.x + n.width / 2;
           const ncy = n.y + n.height / 2;
-          const r = Math.max(30, Math.max(n.width, n.height) * 1.45);
+          const r = 0.5 * Math.max(n.width, n.height); // same spot only: a second symbol beside it is kept
           return !confirmed.some((e) => Math.hypot(ncx - (e.x + e.width / 2), ncy - (e.y + e.height / 2)) < r);
         });
         return [...keep, ...fresh];

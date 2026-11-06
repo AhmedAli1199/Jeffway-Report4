@@ -13,6 +13,47 @@ def rotate_image(image: np.ndarray, angle: int) -> np.ndarray:
         return cv2.rotate(image, cv2.ROTATE_90_COUNTERCLOCKWISE)
     return image
 
+def suppress_by_explained_ink(cands: np.ndarray, ink: np.ndarray, max_explained: float = 0.45) -> List[int]:
+    """
+    Keep one detection per physical symbol without assuming how far apart symbols are.
+
+    Candidates are taken strongest first. Each accepted one claims the drawn pixels (ink) inside its
+    box. A later candidate is the same symbol found again (another rotation or scale, or the head and
+    stem of a switch peaking separately) if most of its ink is already claimed; it is a second symbol
+    if it has ink of its own, even when it touches the first (twin TV / coax points, socket banks).
+    There is no rule on how close accessories may be drawn, so distance alone can't decide this.
+    """
+    if len(cands) == 0:
+        return []
+    order = np.argsort(-cands[:, 4])
+    H, W = ink.shape[:2]
+    claimed = np.zeros((H, W), dtype=bool)
+    keep: List[int] = []
+    centres: List[tuple] = []
+    for i in order:
+        x1, y1, x2, y2 = cands[i, :4]
+        bx1, by1 = max(0, int(x1)), max(0, int(y1))
+        bx2, by2 = min(W, int(np.ceil(x2))), min(H, int(np.ceil(y2)))
+        if bx2 - bx1 < 2 or by2 - by1 < 2:
+            continue
+        w, h = bx2 - bx1, by2 - by1
+        cx, cy = (bx1 + bx2) / 2.0, (by1 + by2) / 2.0
+        # Same spot, different scale/rotation: no need to look at pixels
+        if any(abs(cx - ax) < 0.3 * min(w, aw) and abs(cy - ay) < 0.3 * min(h, ah) for ax, ay, aw, ah in centres):
+            continue
+        box_ink = ink[by1:by2, bx1:bx2]
+        n = int(box_ink.sum())
+        if n < 6:
+            continue
+        explained = float(claimed[by1:by2, bx1:bx2][box_ink].sum()) / n
+        if explained > max_explained:
+            continue
+        keep.append(int(i))
+        centres.append((cx, cy, w, h))
+        claimed[by1:by2, bx1:bx2] |= box_ink
+    return keep
+
+
 def non_max_suppression_fast(
     boxes: np.ndarray, 
     overlap_thresh: float = 0.20,
@@ -241,6 +282,9 @@ class GeometricVisionMatcher:
                     ty_idx, tx_idx = np.where(tag_bin > 0)
                     tpl_tag = tpl_matcher[ty_idx.min():ty_idx.max()+1, tx_idx.min():tx_idx.max()+1]
                     has_tag = True
+        # The code text (2, 3, USB...) may be printed sideways in the legend but upright on the plan,
+        # or the other way round: look for it at every right angle.
+        tpl_tags = [rotate_image(tpl_tag, a) for a in (0, 90, 180, 270)] if has_tag and tpl_tag is not None else []
 
         # 4. Generic Interior Topology Profile:
         # Measure density of strokes inside the template's central interior
@@ -249,6 +293,10 @@ class GeometricVisionMatcher:
         inner_x1, inner_x2 = int(tw_t * 0.22), int(tw_t * 0.78)
         tpl_inner = tpl_fg[inner_y1:inner_y2, inner_x1:inner_x2] if np.any(tpl_fg) else np.array([])
         tpl_inner_density = float(np.mean(tpl_inner)) if tpl_inner.size > 0 else 0.0
+
+        # Drawn strokes that a symbol can "explain": the matching colour for coloured symbols,
+        # dark linework for monochrome ones
+        ink_map = (search_source > 60) if is_chromatic else (img_gray < 150)
 
         all_candidates = []
         # Preliminary correlation gate
@@ -274,7 +322,12 @@ class GeometricVisionMatcher:
 
                 # Template matching via Normalized Cross Correlation on appropriate channel
                 res = cv2.matchTemplate(search_source, scaled_template, cv2.TM_CCOEFF_NORMED)
-                locs = np.where(res >= gate)
+                # Keep only local peaks: every pixel around a match scores above the gate, and checking
+                # each one (tag search, colour check) was the slow part. A peak window of a third of the
+                # symbol still separates two symbols drawn touching.
+                k = (max(3, (cur_w // 3) | 1), max(3, (cur_h // 3) | 1))
+                peaks = (res >= cv2.dilate(res, cv2.getStructuringElement(cv2.MORPH_RECT, k))) & (res >= gate)
+                locs = np.where(peaks)
 
                 for pt_y, pt_x in zip(locs[0], locs[1]):
                     raw_score = float(res[pt_y, pt_x])
@@ -314,22 +367,20 @@ class GeometricVisionMatcher:
                     bx1, by1, bx2, by2 = x1, y1, x2, y2
                     tag_score = 1.0
                     if has_tag and tpl_tag is not None:
-                        tag_h, tag_w = tpl_tag.shape
-                        ny1 = max(0, int(y1 - 15))
-                        ny2 = min(h_max, int(y2 + 15))
-                        nx1 = max(0, int(x1 - 15))
-                        nx2 = min(w_max, int(x2 + 28))
+                        reach = int(max(15, 0.6 * max(cur_w, cur_h)))
+                        ny1 = max(0, int(y1 - reach))
+                        ny2 = min(h_max, int(y2 + reach))
+                        nx1 = max(0, int(x1 - reach))
+                        nx2 = min(w_max, int(x2 + reach))
                         sub_nh = search_source[ny1:ny2, nx1:nx2]
-                        
-                        if sub_nh.shape[0] >= tag_h and sub_nh.shape[1] >= tag_w:
-                            res_t = cv2.matchTemplate(sub_nh, tpl_tag, cv2.TM_CCOEFF_NORMED)
-                            tag_score = float(np.max(res_t))
-                            min_v, max_v, min_l, max_l = cv2.minMaxLoc(res_t)
-                            tag_x = nx1 + max_l[0]
-                            tag_y = ny1 + max_l[1]
-                        else:
-                            tag_score = 0.0
-                            tag_x, tag_y = x1, y1
+                        tag_score, tag_x, tag_y, tag_h, tag_w = 0.0, x1, y1, 0, 0
+                        for tt in tpl_tags:
+                            th_, tw_ = tt.shape
+                            if sub_nh.shape[0] >= th_ and sub_nh.shape[1] >= tw_:
+                                res_t = cv2.matchTemplate(sub_nh, tt, cv2.TM_CCOEFF_NORMED)
+                                _, max_v, _, max_l = cv2.minMaxLoc(res_t)
+                                if max_v > tag_score:
+                                    tag_score, tag_x, tag_y, tag_h, tag_w = float(max_v), nx1 + max_l[0], ny1 + max_l[1], th_, tw_
 
                         # Candidate must have the specific numeral tag present nearby
                         if tag_score < 0.45:
@@ -389,56 +440,24 @@ class GeometricVisionMatcher:
             return []
 
         candidates_arr = np.array(all_candidates)
-        pick_indices = non_max_suppression_fast(
-            candidates_arr[:, :5], 
-            overlap_thresh=0.20, 
-            center_dist_ratio=1.35
-        )
+        pick_indices = suppress_by_explained_ink(candidates_arr, ink_map)
 
-        raw_markers = []
+        markers = []
         high_thresh = 0.72 if is_chromatic else 0.78
         for idx in pick_indices:
-            box = candidates_arr[idx]
-            x1, y1, x2, y2, score, angle = box
-            w = x2 - x1
-            h = y2 - y1
-
-            status = "ai_unverified" if score >= high_thresh else "needs_review"
-
-            raw_markers.append({
+            x1, y1, x2, y2, score, angle = candidates_arr[idx]
+            markers.append({
                 "marker_id": f"mk_{uuid.uuid4().hex[:8]}",
                 "legend_id": legend_id,
-                "x": round(x1, 1),
-                "y": round(y1, 1),
-                "width": round(w, 1),
-                "height": round(h, 1),
-                "confidence_score": round(score, 3),
+                "x": round(float(x1), 1),
+                "y": round(float(y1), 1),
+                "width": round(float(x2 - x1), 1),
+                "height": round(float(y2 - y1), 1),
+                "confidence_score": round(float(score), 3),
                 "angle": int(angle),
-                "status": status,
-                "room": "Unassigned"
+                "status": "ai_unverified" if score >= high_thresh else "needs_review",
+                "room": "Unassigned",
             })
-
-        # Guaranteed Secondary Spatial Deduplication:
-        # Sort by confidence descending so the best-aligned marker is prioritized.
-        # Suppress any candidate whose center is within max(30.0, max(width, height) * 1.45)
-        # of an already accepted marker on the same physical symbol.
-        raw_markers.sort(key=lambda m: m["confidence_score"], reverse=True)
-        markers = []
-        for cand in raw_markers:
-            cx = cand["x"] + cand["width"] / 2.0
-            cy = cand["y"] + cand["height"] / 2.0
-            footprint_r = max(30.0, max(cand["width"], cand["height"]) * 1.45)
-
-            is_dup = False
-            for accepted in markers:
-                acx = accepted["x"] + accepted["width"] / 2.0
-                acy = accepted["y"] + accepted["height"] / 2.0
-                sep = np.sqrt((cx - acx) ** 2 + (cy - acy) ** 2)
-                if sep < footprint_r:
-                    is_dup = True
-                    break
-            if not is_dup:
-                markers.append(cand)
 
         # Sort markers top-to-bottom, left-to-right for consistent ordering
         markers.sort(key=lambda m: (m["y"], m["x"]))
