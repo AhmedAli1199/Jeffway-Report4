@@ -208,7 +208,7 @@ export interface Tender {
   schedule?: { file: string; sheet: string; total: number; plots: Record<string, number>; unmatched: Record<string, number> } | null;
   ai_runs?: AIRun[];
   legend_entries_removed?: number;
-  layer_check?: { confirmed: number; down: number; possible_missed: number };
+  layer_check?: { confirmed: number; down: number; possible_missed: number; found?: number; gangs?: number; room_rule?: number };
   settings: RunSettings;
   ai?: AIRun | null;
   duration_s?: number;

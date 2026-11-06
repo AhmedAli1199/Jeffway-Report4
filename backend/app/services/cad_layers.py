@@ -26,8 +26,11 @@ ELECTRICAL_NAME = re.compile(r"ELEC|LIGHT|POWER|SWITCH|SOCKET|FIRE|SMOKE|DETECT|
 
 
 @lru_cache(maxsize=32)
-def sheet_paths(pdf: str, page_index: int, dpi: int = 200) -> Tuple[Tuple[float, float, float, float, str], ...]:
-    """Vector paths in rendered-image pixels: (x0, y0, x1, y1, layer)."""
+def sheet_paths(pdf: str, page_index: int, dpi: int = 200) -> Tuple[Tuple[float, float, float, float, str, str], ...]:
+    """Vector paths in rendered-image pixels: (x0, y0, x1, y1, layer, shape).
+
+    shape is what the path is made of, e.g. "cll" (a curve and two lines) or "llF" (filled): it doesn't
+    change with position, size or rotation, so every copy of one CAD block gives the same shapes."""
     k = dpi / 72.0
     out = []
     with fitz.open(pdf) as doc:
@@ -35,7 +38,8 @@ def sheet_paths(pdf: str, page_index: int, dpi: int = 200) -> Tuple[Tuple[float,
         rot = page.rotation_matrix
         for d in page.get_drawings():
             r = fitz.Rect(d["rect"]) * rot
-            out.append((r.x0 * k, r.y0 * k, r.x1 * k, r.y1 * k, d.get("layer") or ""))
+            shape = "".join(sorted(it[0] for it in d["items"])) + ("F" if d.get("fill") is not None else "")
+            out.append((r.x0 * k, r.y0 * k, r.x1 * k, r.y1 * k, d.get("layer") or "", shape))
     return tuple(out)
 
 
@@ -47,7 +51,7 @@ def mark_layer(m: Dict[str, Any], paths) -> Optional[str]:
     """The layer most of the strokes inside this mark are drawn on (strokes crossing it, like walls, don't count)."""
     x0, y0 = m["x"] - 4, m["y"] - 4
     x1, y1 = m["x"] + m["width"] + 4, m["y"] + m["height"] + 4
-    c = collections.Counter(L for a, b, cc, d, L in paths if L and a >= x0 and b >= y0 and cc <= x1 and d <= y1)
+    c = collections.Counter(p[4] for p in paths if p[4] and p[0] >= x0 and p[1] >= y0 and p[2] <= x1 and p[3] <= y1)
     return c.most_common(1)[0][0] if c else None
 
 

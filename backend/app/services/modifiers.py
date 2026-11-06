@@ -87,7 +87,9 @@ def legend_modifiers(words) -> Dict[str, Any]:
         line_rows = []
         for ln, ws in sorted(lines.items()):
             text = " ".join(w[4] for w in ws)
-            line_rows.append({"text": text, "tokens": tokens(text), "x0": min(w[0] for w in ws),
+            # where the description starts: a letter printed inside the glyph (smoke "S") can sit in the same text block
+            real = [w for w in ws if len(w[4]) >= 3]
+            line_rows.append({"text": text, "tokens": tokens(text), "x0": min(w[0] for w in ws), "xd": min(w[0] for w in real) if real else None,
                               "y0": min(w[1] for w in ws), "y1": max(w[3] for w in ws)})
         whole = " ".join(r["text"] for r in line_rows)
         if len(whole) > 160 or len(tokens(whole)) < 2:
@@ -99,12 +101,12 @@ def legend_modifiers(words) -> Dict[str, Any]:
                     rows.append({**r, "spans": [(r["y0"], r["y1"])]})
         else:
             rows.append({
-                "text": whole, "tokens": tokens(whole), "x0": min(r["x0"] for r in line_rows),
+                "text": whole, "tokens": tokens(whole), "x0": min(r["x0"] for r in line_rows), "xd": min((r["xd"] for r in line_rows if r["xd"] is not None), default=min(r["x0"] for r in line_rows)),
                 "y0": line_rows[0]["y0"], "y1": line_rows[-1]["y1"],
                 "spans": [(r["y0"], r["y1"]) for r in line_rows],
             })
     if not rows:
-        return {"codes": {}, "by_symbol": {}, "rows": {}, "row_codes": {}}
+        return {"codes": {}, "by_symbol": {}, "rows": {}, "row_codes": {}, "row_tokens": {}, "row_boxes": {}}
 
     # Each code to the nearest row to its right (by the closest line of that row)
     row_codes: Dict[int, Set[str]] = {}
@@ -142,6 +144,8 @@ def legend_modifiers(words) -> Dict[str, Any]:
         "codes": codes, "by_symbol": by_symbol, "rows": row_of,
         "row_codes": {rows[i]["text"]: c for i, c in row_codes.items()},
         "row_tokens": {r["text"]: r["tokens"] for r in rows},
+        # where each symbol's legend row sits: its glyph is drawn just left of the text
+        "row_boxes": {sid: (rows[i]["xd"] if rows[i]["xd"] is not None else rows[i]["x0"], rows[i]["y0"], rows[i]["y1"]) for sid, i in own_row.items()},
     }
 
 
@@ -218,7 +222,8 @@ def describe_for_ai(mods: Dict[str, Any], legend_id: str) -> str:
     return "Codes printed beside symbols on THIS sheet's legend (read from the CAD file):\n" + "\n".join(lines) + "\n" + target
 
 
-def apply_to_sheet(pdf: Path, page_index: int, marks: List[Dict[str, Any]], library_ids: Set[str]) -> int:
+def apply_to_sheet(pdf: Path, page_index: int, marks: List[Dict[str, Any]], library_ids: Set[str],
+                   only: Optional[List[Dict[str, Any]]] = None) -> int:
     """First-pass check. A mark carrying another item's code is moved to that symbol if it's in the
     library; otherwise it's marked down so it isn't counted without a person looking. Returns changes."""
     try:
@@ -230,7 +235,8 @@ def apply_to_sheet(pdf: Path, page_index: int, marks: List[Dict[str, Any]], libr
         return 0
     changed = 0
     owner = nearest_owner(words, marks, set(mods["codes"]))
-    for m in marks:
+    targets = marks if only is None else only  # only: check just these (e.g. items added later), codes still go to the nearest of all marks
+    for m in targets:
         res = check(m, words, mods, owner)
         if not res:
             continue

@@ -194,6 +194,9 @@ def classify_page(page: "fitz.Page") -> Dict[str, Any]:
     elif has_legend:
         verdict = "yes"
         reasons.append("Counted: an electrical plan carries its own legend")
+    elif pos and plan_like:
+        verdict = "yes"
+        reasons.append("Counted: an electrical / M&E plan of its own level (e.g. the roof void), so its items aren't on the floor plans")
     elif pos:
         verdict = "maybe"
         reasons.append("Electrical title but no legend: its symbols may already be on the floor plans, so check before counting")

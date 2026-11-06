@@ -852,8 +852,11 @@ function Overview({
         <div className="callout">
           <Layers size={14} />
           <span>
-            <b>CAD layer check (free):</b> {t.layer_check.down} borderline marks sit on the wrong drawing layer and were marked down,
-            so they don't go to the AI or into the count. {t.layer_check.confirmed > 0 && `${t.layer_check.confirmed} were confirmed by their layer. `}
+            <b>Free checks (no AI):</b> {t.layer_check.confirmed} borderline marks confirmed from the CAD file (same CAD block, layer or
+            legend letter); {t.layer_check.down} marked down (wrong layer, or a repeat on a kitchen/bathroom layout).
+            {t.layer_check.found ? ` ${t.layer_check.found} items the image match missed were added.` : ""}
+            {t.layer_check.gangs ? ` ${t.layer_check.gangs} switch pairs counted as 2-gang plates.` : ""}
+            {t.layer_check.room_rule ? ` ${t.layer_check.room_rule} downlights set to IP/standard by room.` : ""}{" "}
             {t.layer_check.possible_missed > 0 && `${t.layer_check.possible_missed} possible misses are waiting under "Possible misses" in the review queue.`}
           </span>
         </div>

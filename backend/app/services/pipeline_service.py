@@ -461,11 +461,10 @@ def _run_inner(tid: str, s: Dict[str, Any]) -> None:
     match_syms = list(unique.values())
     templates = {id(sym): _decode_b64(sym["template_image_b64"]) for sym in match_syms}
     match_syms = [sym for sym in match_syms if templates[id(sym)] is not None]
-    # Symbols sharing one sample image are one item as far as CAD layers go
-    groups = {_legend_from_symbol(x)["legend_id"]: _legend_from_symbol(unique[x["template_image_b64"]])["legend_id"] for x in symbols}
-    from app.services import cad_layers
-    layer_know = cad_layers.LayerKnowledge(groups)
-    layer_stats = {"confirmed": 0, "down": 0, "possible_missed": 0}
+    # Free checks after the first pass (codes, CAD layers, stroke patterns, lettered symbols, switch plates,
+    # rooms), learned per tender: see services/sheet_checks.py
+    from app.services.sheet_checks import TenderChecks
+    checks = TenderChecks(symbols, _legend_from_symbol)
 
     scales = [1.0] if s.get("quick") else [0.9, 1.0, 1.1]
     legends_all = [_legend_from_symbol(x) for x in symbols]
@@ -501,6 +500,7 @@ def _run_inner(tid: str, s: Dict[str, Any]) -> None:
     _progress(tid, stage="matching", message="Finding symbols…", done=0, total=total,
               sheets_done=len(already), sheets_total=n_sheets, marks_found=0, stopped=False, interrupted=False)
 
+    last_sheet_of = {ht["project_id"]: i for i, (ht, _) in enumerate(sheets)}
     done = 0
     found_total = 0
     legend_dropped = 0
@@ -572,31 +572,28 @@ def _run_inner(tid: str, s: Dict[str, Any]) -> None:
             clean = _cross_symbol_dedupe(marks, order)
             for m in clean:
                 m["status"] = "ai_unverified" if m["confidence_score"] >= s["auto_high"] else "needs_review"
-            # Modifier codes (HL, USB, 2, 3 ...): a mark carrying another item's code is a different item
+            for m in clean:
+                m.setdefault("marker_id", f"mk_{uuid.uuid4().hex[:8]}")
+
+            def not_legend(m, zone=zone, lines=lines):
+                cx, cy = m["x"] + m["width"] / 2, m["y"] + m["height"] / 2
+                if zone and zone["x"] - 5 <= cx <= zone["x"] + zone["width"] + 5 and zone["y"] - 5 <= cy <= zone["y"] + zone["height"] + 5:
+                    return False
+                return not _is_legend_entry(m, lines, label_tokens)
+
             try:
-                from app.services import modifiers
-                modifiers.apply_to_sheet(pdf, page_index, clean, set(order))
+                clean = checks.run(pdf, page_index, pg["page_number"], clean, s["auto_high"], not_legend, pg.get("title") or "")
             except Exception as e:
-                print(f"[pipeline] modifier check skipped: {e}")
-            # CAD layers (free second check): what layer each mark's strokes are on, learned per tender
-            try:
-                paths = cad_layers.sheet_paths(str(pdf), page_index)
-                if cad_layers.has_layers(paths):
-                    layer_know.learn(clean, paths)
-                    st = cad_layers.apply(clean, paths, layer_know, s["auto_high"])
-                    gaps = cad_layers.possible_missed(clean, paths, layer_know)
-                    for m in gaps:
-                        m.update({"marker_id": f"mk_{uuid.uuid4().hex[:8]}", "page_index": page_index,
-                                  "page_number": pg["page_number"], "room": "Unassigned"})
-                    clean.extend(gaps)
-                    layer_stats["confirmed"] += st["confirmed"]
-                    layer_stats["down"] += st["down"]
-                    layer_stats["possible_missed"] += len(gaps)
-            except Exception as e:
-                print(f"[pipeline] layer check skipped: {e}")
+                print(f"[pipeline] sheet checks skipped: {e}")
             added = _merge_sheet(pid, page_index, clean, zone)
             found_total += added
             _set_sheet_state(tid, skey, "done")
+            # Once all of a house type's sheets are in: drop detail-sheet repeats (kitchen layout ceiling lights)
+            if last_sheet_of.get(pid) == si:
+                try:
+                    _finish_house(pid, ht, checks)
+                except Exception as e:
+                    print(f"[pipeline] house finish skipped: {e}")
             _progress(tid, done=done, total=total, sheets_done=len(already) + si + 1, marks_found=found_total,
                       message=f"{label}: {added} marks ready for review", last_sheet=label)
 
@@ -607,7 +604,12 @@ def _run_inner(tid: str, s: Dict[str, Any]) -> None:
 
     started = (load_tender(tid) or {}).get("progress", {}).get("started_at", time.time())
     done_sheets = sum(1 for v in ((load_tender(tid) or {}).get("sheet_state") or {}).values() if v == "done")
-    patch = dict(status="done", legend_entries_removed=legend_dropped, cancel=False, layer_check=layer_stats,
+    cs = checks.stats
+    layer_stats = {"confirmed": cs["layer_confirmed"] + cs["shape_confirmed"] + cs.get("letter_confirmed", 0),
+                   "down": cs["layer_down"] + cs.get("detail_repeats", 0),
+                   "possible_missed": cs["possible_missed"],
+                   "found": cs["shape_found"] + cs.get("letter_found", 0), "gangs": cs["gangs"], "room_rule": cs["room_rule"]}
+    patch = dict(status="done", legend_entries_removed=legend_dropped, cancel=False, layer_check=layer_stats, checks=cs,
                  schedule=(load_tender(tid) or {}).get("schedule"), settings={**s, "api_key": None},
                  finished_at=time.strftime("%Y-%m-%d %H:%M"), duration_s=round(time.time() - started))
     if ai_stats is not None:
@@ -619,6 +621,20 @@ def _run_inner(tid: str, s: Dict[str, Any]) -> None:
 
 
 KEEP_ON_RERUN = ("user_verified", "manual_added", "ai_verified")
+
+
+def _finish_house(pid: str, ht: Dict[str, Any], checks) -> None:
+    """Run the per-house checks over everything saved for this house type, then save."""
+    titles = {p["page_index"]: p.get("title") or "" for p in ht["electrical_pages"]}
+    with _lock:
+        st = load_state(pid)
+        by_page: Dict[int, List[Dict[str, Any]]] = {}
+        for m in st.get("markers", []):
+            by_page.setdefault(m.get("page_index"), []).append(m)
+        sheets = [{"pdf": ht["filepath"], "page_index": pi, "title": titles.get(pi, ""), "marks": ms} for pi, ms in by_page.items()]
+        if checks.finish_house(sheets):
+            save_state(pid, st)
+
 
 
 def _merge_sheet(pid: str, page_index: int, clean: List[Dict[str, Any]], zone: Optional[Dict[str, float]]) -> int:

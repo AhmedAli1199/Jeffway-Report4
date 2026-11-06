@@ -264,6 +264,11 @@ export function ReviewQueue({
     modifier_check?: { note: string; extra: string[]; missing: string[] };
     layer_check?: { layer: string | null; verdict: "confirmed" | "ok" | "elsewhere" | "off" | "unknown" | "missed"; note: string };
     first_pass_score_before_layer?: number;
+    shape_check?: { verdict: "confirmed" | "moved" | "found"; note: string; from?: string };
+    letter_check?: { verdict: "confirmed" | "found"; note: string };
+    gang?: { note: string; from: string[] };
+    room_rule?: { rule: string; from: string; room: string };
+    detail_sheet?: { note: string };
     relabelled_from?: string;
   };
   const legendsInView = useMemo(() => {
@@ -464,6 +469,26 @@ export function ReviewQueue({
                         : meta.first_pass_score_before_layer != null
                           ? ` Score lowered from ${Math.round(meta.first_pass_score_before_layer * 100)}% so it isn't counted unless you approve it.`
                           : ""}
+                  </span>
+                </div>
+              )}
+              {(meta.shape_check || meta.letter_check || meta.gang || meta.room_rule || meta.detail_sheet) && (
+                <div className="callout">
+                  <CircleCheck size={14} style={{ color: "var(--ok)" }} />
+                  <span>
+                    <b>Free checks:</b>{" "}
+                    {[
+                      meta.shape_check &&
+                        (meta.shape_check.verdict === "moved"
+                          ? `${meta.shape_check.note} (moved from ${labels.get(meta.shape_check.from ?? "")?.label ?? "another symbol"}).`
+                          : `${meta.shape_check.note}.`),
+                      meta.letter_check && `${meta.letter_check.note}.`,
+                      meta.gang && `${meta.gang.note}.`,
+                      meta.room_rule && `In the ${meta.room_rule.room}: ${meta.room_rule.rule.toLowerCase()}.`,
+                      meta.detail_sheet && `${meta.detail_sheet.note}.`,
+                    ]
+                      .filter(Boolean)
+                      .join(" ")}
                   </span>
                 </div>
               )}
