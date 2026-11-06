@@ -17,6 +17,19 @@ def hex_to_rgb(hex_color: str) -> Tuple[float, float, float]:
         return (r, g, b)
     return (0.2, 0.6, 1.0)
 
+def cache_stem(file_path: Path) -> str:
+    """Cache name unique to this exact file: packs often reuse names like 'Ground Floor Plan.pdf' in different folders."""
+    import hashlib
+
+    p = Path(file_path).resolve()
+    try:
+        st = p.stat()
+        sig = f"{p}|{st.st_size}|{int(st.st_mtime)}"
+    except OSError:
+        sig = str(p)
+    return f"{p.stem[:40]}_{hashlib.sha1(sig.encode()).hexdigest()[:8]}"
+
+
 class PDFService:
     @staticmethod
     def inspect_pdf(file_path: str | Path) -> Dict[str, Any]:
@@ -133,7 +146,7 @@ class PDFService:
     def render_page_image(file_path: str | Path, page_index: int, dpi: int = 200) -> Tuple[Path, int, int]:
         """Render a specific PDF page to a crisp PNG image and return (path, width, height)."""
         file_path = Path(file_path)
-        cache_key = f"{file_path.stem}_p{page_index}_{dpi}dpi.png"
+        cache_key = f"{cache_stem(file_path)}_p{page_index}_{dpi}dpi.png"
         out_path = CACHE_DIR / cache_key
         
         if out_path.exists():
@@ -276,10 +289,27 @@ class PDFService:
         return None
 
     @staticmethod
+    def get_preview(file_path: str | Path, page_index: int, width: int = 900) -> Path:
+        """A sharp page image exactly `width` px wide (rotation applied), cached as JPEG."""
+        file_path = Path(file_path)
+        width = max(200, min(int(width), 4000))
+        out_path = CACHE_DIR / "previews" / f"{cache_stem(file_path)}_p{page_index}_w{width}.jpg"
+        if out_path.exists():
+            return out_path
+        out_path.parent.mkdir(parents=True, exist_ok=True)
+        with fitz.open(str(file_path)) as doc:
+            page = doc[page_index]
+            rendered_w = page.rect.width  # page.rect already reflects the page's rotation
+            s = width / rendered_w
+            pix = page.get_pixmap(matrix=fitz.Matrix(s, s), alpha=False)
+            pix.save(str(out_path), jpg_quality=88)
+        return out_path
+
+    @staticmethod
     def get_thumbnail(file_path: str | Path, page_index: int) -> Path:
         """Render a lightweight thumbnail for sidebar navigation."""
         file_path = Path(file_path)
-        cache_key = f"{file_path.stem}_thumb_p{page_index}.jpg"
+        cache_key = f"{cache_stem(file_path)}_thumb_p{page_index}.jpg"
         out_path = CACHE_DIR / cache_key
         if out_path.exists():
             return out_path

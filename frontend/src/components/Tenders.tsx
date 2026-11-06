@@ -6,7 +6,7 @@ import {
 import { api, type PackFile } from "../lib/api";
 import { useToast } from "../lib/toast";
 import type { RunSettings, Tender, TenderHouseMarks, ThemePref } from "../lib/types";
-import { cx, isApproved } from "../lib/util";
+import { baseName, cx, isApproved } from "../lib/util";
 import { CostPill, refreshCosts, usd } from "./Costs";
 import { AuditList } from "./AuditLog";
 import { SheetPicker } from "./SheetPicker";
@@ -409,7 +409,7 @@ function RunPanel({ t, onRun, hasKey }: { t: Tender; onRun: (s: Partial<RunSetti
             <span className="grow">
               {schedule ? (
                 <>
-                  <b>Accommodation schedule:</b> {schedule.file.split("/").pop()} · {schedule.total} plots ·{" "}
+                  <b>Accommodation schedule:</b> {baseName(schedule.file)} · {schedule.total} plots ·{" "}
                   {houses.filter((h) => h.plots_source?.file).length} of {houses.length} house types matched
                 </>
               ) : (
@@ -460,7 +460,7 @@ function RunPanel({ t, onRun, hasKey }: { t: Tender; onRun: (s: Partial<RunSetti
                           title="Pick sheets from this PDF"
                         >
                           <span className="meta">
-                            <span className="title truncate">{d.path.split("/").pop()}</span>
+                            <span className="title truncate">{baseName(d.path)}</span>
                             <span className="sub">{d.pages} pages · not counted</span>
                           </span>
                           {(d.maybe ?? 0) > 0 && <span className="pill pill-review">{d.maybe} to check</span>}

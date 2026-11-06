@@ -164,6 +164,16 @@ def plots(tender_id: str, p: Plots):
     return ps.set_plots(tender_id, p.project_id, p.plots)
 
 
+@router.get("/preview/page")
+def page_preview(filepath: str, page_index: int, w: int = 900):
+    """Sharp page preview at a given width, for reviewing sheets."""
+    from fastapi.responses import FileResponse
+    path = Path(filepath)
+    if not path.exists():
+        raise HTTPException(404, "PDF not found")
+    return FileResponse(PDFService.get_preview(path, page_index, w), media_type="image/jpeg", headers={"Cache-Control": "max-age=86400"})
+
+
 @router.get("/crop/image")
 def crop(filepath: str, page_index: int, x: float, y: float, w: float, h: float, pad: float = 2.0, size: int = 360):
     """A square crop around a mark, scaled for the review queue. pad is a multiple of the mark size."""

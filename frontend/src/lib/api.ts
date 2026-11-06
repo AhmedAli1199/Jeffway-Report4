@@ -204,8 +204,8 @@ export const api = {
   },
   setSheets: (id: string, rel_path: string, page_indexes: number[]) =>
     postJson<Tender>(`/tenders/${q(id)}/sheets`, { rel_path, page_indexes }, "Couldn't save the sheet choice"),
-  pagePreviewUrl: (filepath: string, page: number) =>
-    `${API_BASE}/projects/page-image?filepath=${q(filepath)}&page_index=${page}&dpi=110`,
+  pagePreviewUrl: (filepath: string, page: number, width = 2400) =>
+    `${API_BASE}/tenders/preview/page?filepath=${q(filepath)}&page_index=${page}&w=${Math.round(width)}`,
   costs: () => request<CostSummary>("/tenders/costs/summary", undefined, "Couldn't load AI spend"),
   setPlots: (id: string, project_id: string, plots: number) =>
     postJson<Tender>(`/tenders/${q(id)}/plots`, { project_id, plots }, "Couldn't save plots"),

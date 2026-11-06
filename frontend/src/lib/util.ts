@@ -79,3 +79,6 @@ export const CATEGORIES = [
 ];
 
 export const FIX_STAGES = ["1st Fix", "2nd Fix", "Communals", "Specialist"] as const;
+
+/** File name from a path written with either / or \\ separators. */
+export const baseName = (p: string) => p.split(/[\\/]/).pop() ?? p;
