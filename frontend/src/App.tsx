@@ -12,7 +12,8 @@ import { LeftPanel, type LeftTab } from "./components/LeftPanel";
 import { Inspector, type RightTab } from "./components/Inspector";
 import { CanvasView, type CanvasControls } from "./components/CanvasView";
 import { BusyBar, ReviewDock, ToolHint, Toolbox, ViewBox, ZoomBox } from "./components/Overlays";
-import { AICheckModal, LibraryModal, RoomModal, SettingsModal, ShortcutsModal, SymbolModal } from "./components/Modals";
+import { AICheckModal, RoomModal, SettingsModal, ShortcutsModal, SymbolModal } from "./components/Modals";
+import { SymbolLibrary } from "./components/SymbolLibrary";
 import { CommandPalette, type PaletteItem } from "./components/CommandPalette";
 import { SymbolSample } from "./components/ui";
 import { HomeView, TenderView } from "./components/Tenders";
@@ -455,7 +456,14 @@ export default function App() {
       {dialog === "settings" && (
         <SettingsModal t={t} onClose={() => setDialog(null)} theme={theme.pref} setTheme={theme.setPref} mode={mode} setMode={setMode} />
       )}
-      {dialog === "library" && <LibraryModal t={t} onClose={() => setDialog(null)} />}
+      {dialog === "library" && (
+        <SymbolLibrary
+          onClose={() => setDialog(null)}
+          inProject={new Set(t.legends.map((l) => l.legend_id))}
+          onAddToProject={t.addFromLibrary}
+          onChanged={t.setLibraryState}
+        />
+      )}
       {dialog === "shortcuts" && <ShortcutsModal onClose={() => setDialog(null)} />}
       {dialog === "palette" && <CommandPalette items={paletteItems} onClose={() => setDialog(null)} />}
     </div>

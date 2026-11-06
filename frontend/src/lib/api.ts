@@ -172,6 +172,18 @@ export const api = {
     postJson<{ rooms: RoomZone[] }>("/ai/detect-rooms", payload, "Room detection failed"),
 
   library: () => request<LibrarySymbol[]>("/symbols/library", undefined, "Couldn't load symbol library"),
+  addSymbol: (body: Record<string, unknown>) => postJson<LibrarySymbol>("/symbols/library/add", body, "Couldn't add the symbol"),
+  async deleteSymbol(id: string): Promise<void> {
+    await request<unknown>(`/symbols/library/${q(id)}`, { method: "DELETE" }, "Couldn't delete the symbol");
+  },
+  workbookRows: () =>
+    request<{ row: number; description: string; manufacturer: string; part_code: string; unit_price: number | null }[]>(
+      "/symbols/workbook-rows", undefined, "Couldn't read the workbook lines"),
+  async uploadSourcePdf(file: File): Promise<{ filepath: string; name: string; pages: { page_index: number; page_number: number }[] }> {
+    const form = new FormData();
+    form.append("file", file, file.name);
+    return request("/symbols/source-pdf", { method: "POST", body: form }, "Couldn't open that PDF");
+  },
   saveLibrary: (lib: LibrarySymbol[]) => postJson<unknown>("/symbols/library", lib, "Couldn't save symbol library"),
 
   // ---- Tender pipeline

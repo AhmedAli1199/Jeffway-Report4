@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
-  ArrowRight, Check, Download, FileSpreadsheet, ChevronDown, ChevronRight, CircleCheck, FileText, FolderOpen, FolderUp, Layers,
+  ArrowRight, BookOpen, Check, Download, FileSpreadsheet, ChevronDown, ChevronRight, CircleCheck, FileText, FolderOpen, FolderUp, Layers,
   LoaderCircle, Minus, Monitor, Moon, Play, Plus, Sparkles, Sun, TriangleAlert, Upload, Zap, PencilRuler,
 } from "lucide-react";
 import { api, type PackFile } from "../lib/api";
@@ -10,6 +10,7 @@ import { baseName, cx, isApproved } from "../lib/util";
 import { CostPill, refreshCosts, usd } from "./Costs";
 import { AuditList } from "./AuditLog";
 import { SheetPicker } from "./SheetPicker";
+import { SymbolLibrary } from "./SymbolLibrary";
 import type { SheetInfo } from "../lib/types";
 import { MenuButton, Modal } from "./ui";
 import type { AIEstimate } from "../lib/types";
@@ -19,6 +20,7 @@ import type { AIEstimate } from "../lib/types";
 export function PageHeader({
   theme, setTheme, onHome, children,
 }: { theme: ThemePref; setTheme: (t: ThemePref) => void; onHome: () => void; children?: React.ReactNode }) {
+  const [lib, setLib] = useState(false);
   const next: ThemePref = theme === "system" ? "light" : theme === "light" ? "dark" : "system";
   const Icon = theme === "dark" ? Moon : theme === "light" ? Sun : Monitor;
   return (
@@ -28,6 +30,10 @@ export function PageHeader({
         Plotline
       </button>
       <nav className="crumbs grow">{children}</nav>
+      <button className="btn btn-ghost btn-sm" onClick={() => setLib(true)} title="Symbols Plotline looks for">
+        <BookOpen size={14} /> Symbol library
+      </button>
+      {lib && <SymbolLibrary onClose={() => setLib(false)} />}
       <CostPill />
       <button className="icon-btn" aria-label={`Theme: ${theme}`} title={`Theme: ${theme}`} onClick={() => setTheme(next)}>
         <Icon size={16} />

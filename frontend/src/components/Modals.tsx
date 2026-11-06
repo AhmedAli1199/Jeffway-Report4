@@ -3,7 +3,7 @@ import { CircleCheck, KeyRound, LoaderCircle, Plus, Search, Sparkles, TriangleAl
 import type { CropIntent, Takeoff } from "../state/useTakeoff";
 import type { CanvasMode, LegendItem, LibrarySymbol, Marker, Rect, ThemePref, Verification } from "../lib/types";
 import { CATEGORIES, FIX_STAGES, SYMBOL_COLORS, isApproved, isOpen } from "../lib/util";
-import { API_BASE } from "../lib/api";
+import { API_BASE, api } from "../lib/api";
 import { Modal, SymbolSample } from "./ui";
 import { refreshCosts, usd, useCosts } from "./Costs";
 
@@ -22,6 +22,24 @@ export function SymbolModal({ t, intent }: { t: Takeoff; intent: CropIntent }) {
     count: base?.count,
   }));
   const set = (patch: Partial<LegendItem>) => setForm((f) => ({ ...f, ...patch }));
+  const inLibrary = t.library.some((s) => (s.legend_id || s.symbol_id) === form.legend_id || String(s.cad_label ?? "").toLowerCase() === form.label.trim().toLowerCase());
+  const [toLibrary, setToLibrary] = useState(!base);
+  const saveAll = async (runCount: boolean) => {
+    const leg = final();
+    if (toLibrary && !inLibrary && leg.template_image_b64) {
+      try {
+        const added = await api.addSymbol({
+          cad_label: leg.label, template_image_b64: leg.template_image_b64, source: "drawing",
+          category: leg.category, fix_stage: leg.fix_stage, manufacturer: leg.manufacturer, part_code: leg.part_code, color: leg.color,
+        });
+        t.setLibraryState([...t.library, added]);
+        leg.legend_id = (added.legend_id || added.symbol_id) as string;
+      } catch {
+        /* name clash or offline: the symbol is still added to this drawing */
+      }
+    }
+    t.saveSymbol(leg, runCount);
+  };
   const final = (): LegendItem => ({ ...form, label: form.label.trim(), template_crop_coords: intent.rect, template_image_b64: intent.image });
   const valid = form.label.trim().length > 0;
 
@@ -36,10 +54,10 @@ export function SymbolModal({ t, intent }: { t: Takeoff; intent: CropIntent }) {
             <Crop size={14} /> Crop again
           </button>
           <span className="grow" />
-          <button className="btn btn-ghost" disabled={!valid} onClick={() => t.saveSymbol(final(), false)}>
+          <button className="btn btn-ghost" disabled={!valid} onClick={() => saveAll(false)}>
             Save only
           </button>
-          <button className="btn btn-copper" disabled={!valid} onClick={() => t.saveSymbol(final(), true)}>
+          <button className="btn btn-copper" disabled={!valid} onClick={() => saveAll(true)}>
             Save and count
           </button>
         </>
@@ -55,7 +73,7 @@ export function SymbolModal({ t, intent }: { t: Takeoff; intent: CropIntent }) {
         className="grid2"
         onSubmit={(e) => {
           e.preventDefault();
-          if (valid) t.saveSymbol(final(), true);
+          if (valid) saveAll(true);
         }}
       >
         <div className="field" style={{ gridColumn: "1 / -1" }}>
@@ -90,6 +108,15 @@ export function SymbolModal({ t, intent }: { t: Takeoff; intent: CropIntent }) {
             ))}
           </div>
         </div>
+        {!inLibrary && (
+          <label className="toggle-row" style={{ gridColumn: "1 / -1" }}>
+            <input type="checkbox" checked={toLibrary} onChange={(e) => setToLibrary(e.target.checked)} />
+            <span>
+              <b>Also add to the symbol library</b>
+              <small>Every takeoff run from now on will look for it. Link it to a workbook line later in the library.</small>
+            </span>
+          </label>
+        )}
         <button type="submit" hidden />
       </form>
     </Modal>

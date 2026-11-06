@@ -718,7 +718,7 @@ export function useTakeoff() {
     busy, save, savedAt, apiKey, plots, exported,
     // setters
     setFilter, setThreshold, setTool, setSelectedLegendId, setApiKey, setPlots, setCropIntent, setPendingRoom,
-    setCropTarget,
+    setCropTarget, setLibraryState: setLibrary,
     // actions
     refreshProjects, openProject, uploadPdf, goToPage, step, selectMarker, approve, reject, addManual,
     approveHighConfidence, approveAIChecked, approveAllForLegend, clearOpenForLegend, clearMarks, countLegend, countAllOnSheet,
