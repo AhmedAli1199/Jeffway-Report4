@@ -209,7 +209,8 @@ class OpenAIService:
         candidate_patches: List[Dict[str, Any]], # [{"marker_id": "...", "patch_b64": "..."}]
         legend_label: str,
         other_legends: Optional[List[str]] = None,
-        api_key: Optional[str] = None
+        api_key: Optional[str] = None,
+        modifier_context: str = "",
     ) -> List[Dict[str, Any]]:
         """
         Stage 2 AI Vision Verifier: Evaluates candidate crops against the reference template using
@@ -304,7 +305,14 @@ class OpenAIService:
                 f"   - YOU ARE STRICTLY PROHIBITED FROM REJECTING A CANDIDATE DUE TO ORIENTATION OR TILT. If the internal geometry matches the reference at ANY orthogonal angle, it IS A VALID MATCH (is_valid: true).\n\n"
                 f"2. CAD LINEWORK & BACKGROUND OVERLAP TOLERANCE:\n"
                 f"   - Blueprint electrical symbols are overlaid directly onto architectural floor plans.\n"
-                f"   - IGNORE background architectural lines and wall hatching. Focus solely on the electrical symbol glyph itself.\n\n"
+                f"   - IGNORE architectural lines, wall hatching, dimensions and dashed circuit wires.\n"
+                f"   - BUT DO NOT IGNORE short code letters or numbers printed right beside or inside the glyph (e.g. HL, USB, IP, 2, 3, R, F, CL). "
+                f"They are part of the symbol's identity: the same glyph with a different code is a DIFFERENT item.\n\n"
+                f"2b. CODE LETTER RULE (overrides rule 2):\n"
+                f"   - If a candidate has a code beside it that the target does not have, or lacks the code the target has, it is a FALSE MATCH: "
+                f"set 'is_valid': false and set 'suggested_reclassification' to the item that code marks on the legend.\n"
+                f"   - The text listed under each candidate was read directly from the CAD file and is reliable even if it is small in the image.\n"
+                f"{modifier_context}\n\n"
                 f"3. REJECT UNRELATED GRAPHICS & DIFFERENT SYMBOLS:\n"
                 f"   - Reject if the crop is purely architectural text, blank background, or bare walls with NO electrical symbol.\n"
                 f"   - Reject if the symbol is clearly a DIFFERENT electrical device or different variant.\n"
@@ -348,9 +356,14 @@ class OpenAIService:
             for idx, cand in enumerate(batch, 1):
                 ang = cand.get("angle")
                 ang_str = f" [Wall Alignment: {ang}°]" if ang is not None else ""
+                codes = cand.get("nearby_codes")
+                code_str = (
+                    f" Code text printed beside it on the drawing (from the CAD file): {', '.join(codes)}." if codes
+                    else (" No code text printed beside it on the drawing (from the CAD file)." if codes is not None else "")
+                )
                 user_content.append({
                     "type": "text",
-                    "text": f"Candidate #{idx} (Marker ID: {cand['marker_id']}{ang_str}):"
+                    "text": f"Candidate #{idx} (Marker ID: {cand['marker_id']}{ang_str}):{code_str}"
                 })
                 user_content.append({
                     "type": "image_url",
@@ -399,6 +412,7 @@ class OpenAIService:
                             "angle": c.get("angle"),
                             "confidence_score": c.get("confidence_score"),
                             "page_index": c.get("page_index"),
+                            "nearby_codes": c.get("nearby_codes"),
                         }
                         for i, c in enumerate(batch)
                     ],

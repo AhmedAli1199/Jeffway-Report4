@@ -567,6 +567,12 @@ def _run_inner(tid: str, s: Dict[str, Any]) -> None:
             clean = _cross_symbol_dedupe(marks, order)
             for m in clean:
                 m["status"] = "ai_unverified" if m["confidence_score"] >= s["auto_high"] else "needs_review"
+            # Modifier codes (HL, USB, 2, 3 ...): a mark carrying another item's code is a different item
+            try:
+                from app.services import modifiers
+                modifiers.apply_to_sheet(pdf, page_index, clean, set(order))
+            except Exception as e:
+                print(f"[pipeline] modifier check skipped: {e}")
             added = _merge_sheet(pid, page_index, clean, zone)
             found_total += added
             _set_sheet_state(tid, skey, "done")

@@ -273,7 +273,8 @@ def verify_candidates_ai(req: VerifyCandidatesRequest):
         # Frame slightly larger than the identified circle (~30% padding, 8-10px beyond circle boundary)
         # Prevents bleeding into adjacent rows/symbols while giving full symbol context
         circle_radius = max(16, int(round(max(mw, mh) / 2.0)) + 3)
-        crop_padding = max(8, int(round(circle_radius * 0.32)))
+        # Wide enough to include code letters printed beside the symbol (HL, USB, 2, 3 ...)
+        crop_padding = max(14, int(round(circle_radius * 0.9)))
         half_box = circle_radius + crop_padding
 
         cx1 = max(0, center_x - half_box)
@@ -320,12 +321,27 @@ def verify_candidates_ai(req: VerifyCandidatesRequest):
                 if l.legend_id != req.legend.legend_id and l.label.strip():
                     other_labels.append(l.label.strip())
 
+        # Codes from this sheet's legend, and which ones are printed beside each candidate
+        modifier_context = ""
+        try:
+            from app.services import modifiers
+            words = modifiers.sheet_words(str(path), req.page_index)
+            mods = modifiers.legend_modifiers(words)
+            modifier_context = modifiers.describe_for_ai(mods, req.legend.legend_id)
+            known = set(mods["codes"])
+            for c in candidate_patches:
+                if c.get("x") is not None:
+                    c["nearby_codes"] = sorted(modifiers.codes_near(words, {"x": float(c["x"]), "y": float(c["y"]), "width": float(c.get("width") or 30), "height": float(c.get("height") or 30)}, known))
+        except Exception as e:
+            print(f"[verify] modifier context skipped: {e}")
+
         results = OpenAIService.verify_marker_patches(
             template_img_path=tpl_path,
             candidate_patches=candidate_patches,
             legend_label=req.legend.label,
             other_legends=other_labels,
-            api_key=req.api_key
+            api_key=req.api_key,
+            modifier_context=modifier_context,
         )
         return {"verifications": results}
     except Exception as e:

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { ArrowLeft, Check, ChevronLeft, ChevronRight, CircleCheck, LoaderCircle, MapPin, Sparkles, Undo2, X, CheckCheck } from "lucide-react";
+import { ArrowLeft, Check, ChevronLeft, ChevronRight, CircleCheck, LoaderCircle, MapPin, Sparkles, Undo2, X, CheckCheck, TriangleAlert } from "lucide-react";
 import { api } from "../lib/api";
 import { useToast } from "../lib/toast";
 import type { Marker, Tender, TenderHouseMarks, ThemePref } from "../lib/types";
@@ -256,7 +256,12 @@ export function ReviewQueue({
   const total = queue.length + history.length;
   const info = cur ? labels.get(cur.m.legend_id) : undefined;
   const page = cur ? cur.h.electrical_pages.find((p) => p.page_index === cur.m.page_index) : undefined;
-  const meta = (cur?.m.metadata ?? {}) as { ai_audit_reason?: string; first_pass_score?: number };
+  const meta = (cur?.m.metadata ?? {}) as {
+    ai_audit_reason?: string;
+    first_pass_score?: number;
+    modifier_check?: { note: string; extra: string[]; missing: string[] };
+    relabelled_from?: string;
+  };
   const legendsInView = useMemo(() => {
     const ids = new Set<string>();
     for (const h of houses ?? []) if (!house || h.project_id === house) for (const m of h.markers) if (inView(view, m, threshold)) ids.add(m.legend_id);
@@ -428,6 +433,17 @@ export function ReviewQueue({
                 </figure>
               </div>
 
+              {meta.modifier_check && (
+                <div className="callout" style={{ background: "var(--review-soft)" }}>
+                  <TriangleAlert size={14} style={{ color: "var(--review)" }} />
+                  <span>
+                    <b>Code check:</b> {meta.modifier_check.note}.
+                    {meta.relabelled_from
+                      ? ` Moved here from ${labels.get(meta.relabelled_from)?.label ?? "another symbol"}.`
+                      : " Its score was lowered so it isn't counted unless you approve it."}
+                  </span>
+                </div>
+              )}
               {meta.ai_audit_reason && (
                 <div className="callout">
                   <Sparkles size={14} style={{ color: "var(--ai)" }} />

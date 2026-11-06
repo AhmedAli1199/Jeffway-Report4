@@ -26,7 +26,7 @@ interface AuditFull {
   model_used?: string;
   template_image_b64?: string;
   template_strip_b64?: string;
-  candidates: { marker_id: string; patch_b64: string; index: number; angle?: number; confidence_score?: number; page_index?: number }[];
+  candidates: { marker_id: string; patch_b64: string; index: number; angle?: number; confidence_score?: number; page_index?: number; nearby_codes?: string[] | null }[];
   verifications: { marker_id: string; is_valid: boolean; confidence: number; reason: string; suggested_reclassification?: string }[];
   prompt_text?: string;
   raw_response?: string;
@@ -219,6 +219,7 @@ export function AuditDetail({ id, onClose }: { id: string; onClose: () => void }
                         {c.confidence_score != null && <span>first pass {Math.round(c.confidence_score * 100)}%</span>}
                         {c.angle != null && <span>{c.angle}°</span>}
                         {c.page_index != null && <span>p.{c.page_index + 1}</span>}
+                        {c.nearby_codes != null && <span title="Code text beside it, read from the CAD file">{c.nearby_codes.length ? `code: ${c.nearby_codes.join(", ")}` : "no code"}</span>}
                       </div>
                       {v ? (
                         <p>{v.reason}</p>
