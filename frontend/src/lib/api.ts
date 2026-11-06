@@ -202,6 +202,8 @@ export const api = {
     form.append("file", file, file.name);
     return request<Tender>(`/tenders/${q(id)}/schedule`, { method: "POST", body: form }, "Couldn't read that schedule");
   },
+  exportTenderWorkbook: (id: string, name: string, mode: "counted" | "approved", threshold: number) =>
+    download(`/tenders/${q(id)}/export`, { mode, threshold }, `${name} - Tender workbook.xlsx`, "Workbook export failed"),
   stopTender: (id: string) => postJson<Tender>(`/tenders/${q(id)}/stop`, {}, "Couldn't stop the run"),
   setSheets: (id: string, rel_path: string, page_indexes: number[]) =>
     postJson<Tender>(`/tenders/${q(id)}/sheets`, { rel_path, page_indexes }, "Couldn't save the sheet choice"),

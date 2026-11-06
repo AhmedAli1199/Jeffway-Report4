@@ -201,7 +201,7 @@ export function AppBar(p: Props) {
             <div className="label eyebrow">Counted marks only</div>
             <button className="menu-item" onClick={() => { close(); t.exportAs("tender"); }}>
               <FileSpreadsheet size={15} />
-              <span className="meta">Master tender workbook<small>Fills the house-type and Second Fix tabs</small></span>
+              <span className="meta">Tender workbook (this house type)<small>Blank copy of Jeffway's workbook with only this house type's counts and plots</small></span>
             </button>
             <button className="menu-item" onClick={() => { close(); t.exportAs("takeoff"); }}>
               <FileSpreadsheet size={15} />

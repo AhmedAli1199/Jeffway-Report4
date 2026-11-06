@@ -209,3 +209,53 @@ def costs():
     s = cost_ledger.summary(names)
     s["cost_per_call"], s["estimate_basis"] = cost_ledger.cost_per_call()
     return s
+
+
+class ExportRequest(BaseModel):
+    mode: str = "counted"  # counted: approved + AI-confirmed + unreviewed at/above threshold; approved: approved only
+    threshold: float = 0.8
+
+
+@router.post("/{tender_id}/export")
+def export_tender(tender_id: str, r: ExportRequest):
+    """The whole tender into Jeffway's workbook: every house type's counts and plots."""
+    import re
+    import time
+    from fastapi.responses import FileResponse
+    from app.core.config import EXPORTS_DIR
+    from app.services.master_excel_service import MasterExcelService
+
+    t = ps.reconcile(ps.load_tender(tender_id))
+    if not t:
+        raise HTTPException(404, "Tender not found")
+    approved = ("user_verified", "manual_added")
+
+    def keep(m):
+        if r.mode == "approved":
+            return m.get("status") in approved
+        return m.get("status") in approved or m.get("status") == "ai_verified" or float(m.get("confidence_score") or 0) >= r.threshold
+
+    houses = []
+    for ht in t["house_types"]:
+        st = ps.load_state(ht["project_id"])
+        src = ht.get("plots_source") or {}
+        houses.append({
+            "name": ht["name"],
+            "plots": int(ht.get("plots") or 1),
+            "plot_source": f"schedule: {src.get('file')}" if src.get("file") else ("set by hand" if src.get("manual") else "default (1)"),
+            "markers": [m for m in st.get("markers", []) if keep(m)],
+        })
+    basis = (
+        "Counted = approved marks only." if r.mode == "approved"
+        else f"Counted = approved + AI-confirmed + unreviewed marks scoring {round(r.threshold * 100)}% or more."
+    )
+    if t.get("status") == "running":
+        basis += " Counting was still running when this was exported."
+    safe = re.sub(r"[^A-Za-z0-9 _-]+", "", t["name"]).strip()[:60] or "Tender"
+    out = EXPORTS_DIR / f"{safe} - Tender workbook {time.strftime('%Y%m%d-%H%M%S')}.xlsx"
+    try:
+        MasterExcelService.generate_tender_workbook(houses, t["name"], out, basis=basis)
+    except FileNotFoundError as e:
+        raise HTTPException(500, str(e))
+    return FileResponse(out, media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                        filename=f"{safe} - Tender workbook.xlsx")

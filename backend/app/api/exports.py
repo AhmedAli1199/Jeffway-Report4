@@ -42,12 +42,31 @@ def export_master_tender(req: ExportRequest):
     
     clean_name = req.project_name.replace("The ", "").strip()
     out_file = EXPORTS_DIR / f"Jeffway_Tender_{clean_name}.xlsx"
-    
+
+    # Plots come from the tender this house type belongs to (accommodation schedule or set by hand)
+    plots, plot_source = 1, ""
+    try:
+        from app.core.config import PROJECTS_DIR
+        from app.services import pipeline_service as ps
+        meta_file = PROJECTS_DIR / req.project_id / "project.json"
+        if meta_file.exists():
+            meta = json.load(open(meta_file))
+            t = ps.load_tender(meta.get("tender_id") or "") if meta.get("tender_id") else None
+            ht = next((h for h in (t or {}).get("house_types", []) if h["project_id"] == req.project_id), None)
+            if ht:
+                plots = int(ht.get("plots") or 1)
+                src = ht.get("plots_source") or {}
+                plot_source = f"schedule: {src.get('file')}" if src.get("file") else ("set by hand" if src.get("manual") else "")
+    except Exception as e:
+        print(f"[export] plots lookup: {e}")
+
     try:
         exported_path = MasterExcelService.generate_master_tender(
             house_type_name=req.project_name,
             markers=req.markers,
-            output_path=out_file
+            output_path=out_file,
+            plots=plots,
+            plot_source=plot_source,
         )
         return FileResponse(
             exported_path,

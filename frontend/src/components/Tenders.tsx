@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
-  ArrowRight, Check, ChevronDown, ChevronRight, CircleCheck, FileText, FolderOpen, FolderUp, Layers,
+  ArrowRight, Check, Download, FileSpreadsheet, ChevronDown, ChevronRight, CircleCheck, FileText, FolderOpen, FolderUp, Layers,
   LoaderCircle, Minus, Monitor, Moon, Play, Plus, Sparkles, Sun, TriangleAlert, Upload, Zap, PencilRuler,
 } from "lucide-react";
 import { api, type PackFile } from "../lib/api";
@@ -11,7 +11,7 @@ import { CostPill, refreshCosts, usd } from "./Costs";
 import { AuditList } from "./AuditLog";
 import { SheetPicker } from "./SheetPicker";
 import type { SheetInfo } from "../lib/types";
-import { Modal } from "./ui";
+import { MenuButton, Modal } from "./ui";
 import type { AIEstimate } from "../lib/types";
 
 /* ------------------------------------------------------------------ shared */
@@ -717,6 +717,16 @@ function Overview({
   onAIStarted: (t: Tender) => void;
 }) {
   const [open, setOpen] = useState<string | null>(marks[0]?.project_id ?? null);
+  const toast = useToast();
+  const exportWb = async (mode: "counted" | "approved") => {
+    toast({ tone: "info", title: "Building the workbook…" });
+    try {
+      await api.exportTenderWorkbook(t.tender_id, t.name, mode, threshold);
+      toast({ tone: "success", title: "Workbook downloaded", body: "Open the “Plotline takeoff” sheet first to see what was filled in." });
+    } catch (e) {
+      toast({ tone: "error", title: "Export failed", body: (e as Error).message });
+    }
+  };
 
   const counted = (m: TenderHouseMarks["markers"][number]) => isApproved(m) || m.confidence_score >= threshold;
 
@@ -767,6 +777,37 @@ function Overview({
           <h1>{t.name}</h1>
         </div>
         <div className="row">
+          <MenuButton
+            label="Export tender workbook"
+            className="btn btn-ghost"
+            align="right"
+            trigger={<><Download size={14} /> Export workbook</>}
+          >
+            {(close) => (
+              <>
+                <div className="label eyebrow">Jeffway tender workbook · all house types</div>
+                <button className="menu-item" onClick={() => { close(); exportWb("counted"); }}>
+                  <FileSpreadsheet size={15} />
+                  <span className="meta">
+                    Counted marks
+                    <small>Approved, AI-confirmed and unreviewed ≥ {Math.round(threshold * 100)}%: matches the numbers on this page</small>
+                  </span>
+                </button>
+                <button className="menu-item" onClick={() => { close(); exportWb("approved"); }}>
+                  <FileSpreadsheet size={15} />
+                  <span className="meta">
+                    Approved marks only
+                    <small>Just what a person has approved in the review queue</small>
+                  </span>
+                </button>
+                <hr />
+                <div className="label muted" style={{ fontSize: 11.5, maxWidth: 300, lineHeight: 1.45 }}>
+                  Starts from a blank copy of the workbook: every old quantity and plot count is cleared, then only
+                  Plotline's counts and plots are filled in. A "Plotline takeoff" sheet shows where each number came from.
+                </div>
+              </>
+            )}
+          </MenuButton>
           <button className="btn btn-ghost" onClick={onRerun} disabled={t.status === "running"}>
             <Zap size={14} /> Run again
           </button>
