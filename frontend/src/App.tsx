@@ -197,6 +197,8 @@ export default function App() {
       { id: "crop", group: "Actions", label: "Crop a new symbol sample", keys: "C", icon: <Crop size={15} />, run: () => t.startCrop(null) },
       { id: "ai", group: "Actions", label: "Ask AI to check marks", icon: <Sparkles size={15} />, run: () => setDialog("ai") },
       { id: "strong", group: "Actions", label: "Approve strong matches on this sheet", hint: "82% or more", icon: <Sparkles size={15} />, run: t.approveHighConfidence },
+      { id: "clear-sheet", group: "Actions", label: "Clear all marks on this sheet", hint: "Start over; undo available", icon: <ScanLine size={15} />, run: () => t.clearMarks("sheet") },
+      { id: "clear-all", group: "Actions", label: "Clear all marks on every sheet", hint: "Start over; undo available", icon: <ScanLine size={15} />, run: () => t.clearMarks("all") },
       { id: "legend-zone", group: "Actions", label: "Find and exclude the legend table", icon: <ScanLine size={15} />, run: t.detectLegendZone },
       { id: "exp-tender", group: "Export", label: "Export master tender workbook", icon: <FileSpreadsheet size={15} />, run: () => t.exportAs("tender") },
       { id: "exp-takeoff", group: "Export", label: "Export takeoff schedule", icon: <FileSpreadsheet size={15} />, run: () => t.exportAs("takeoff") },

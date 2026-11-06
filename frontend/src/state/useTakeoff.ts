@@ -354,6 +354,20 @@ export function useTakeoff() {
     toast({ tone: "info", title: "Cleared unreviewed marks", action: { label: "Undo", run: () => setMarkers(before) } });
   };
 
+  /** Remove every mark (approved or not) on this sheet, or in the whole house type. Symbols and samples are kept. */
+  const clearMarks = (scope: "sheet" | "all") => {
+    const before = markers;
+    const n = scope === "sheet" ? markers.filter((m) => m.page_index === pageIndex).length : markers.length;
+    setMarkers((prev) => (scope === "sheet" ? prev.filter((m) => m.page_index !== pageIndex) : []));
+    setLegends((prev) => prev.map((l) => ({ ...l, count: 0 })));
+    setSelectedMarkerId(null);
+    toast({
+      tone: "info",
+      title: n ? `Cleared ${n} marks ${scope === "sheet" ? "on this sheet" : "in this house type"}` : "No marks to clear",
+      action: n ? { label: "Undo", run: () => setMarkers(before) } : undefined,
+    });
+  };
+
   // ---------- Counting ----------
   const countLegend = async (legend: LegendItem, opts: { quiet?: boolean } = {}): Promise<number | null> => {
     if (!project) return null;
@@ -703,7 +717,7 @@ export function useTakeoff() {
     setCropTarget,
     // actions
     refreshProjects, openProject, uploadPdf, goToPage, step, selectMarker, approve, reject, addManual,
-    approveHighConfidence, approveAIChecked, approveAllForLegend, clearOpenForLegend, countLegend, countAllOnSheet,
+    approveHighConfidence, approveAIChecked, approveAllForLegend, clearOpenForLegend, clearMarks, countLegend, countAllOnSheet,
     startCrop, finishCrop, saveSymbol, updateLegend, deleteLegend, addFromLibrary, saveLibrary, scanLegendAI,
     addExcluded, removeExcluded, detectLegendZone, addRoom, removeRoom, detectRoomsAI, runAICheck, applyAICheck,
     exportAs, saveNow,

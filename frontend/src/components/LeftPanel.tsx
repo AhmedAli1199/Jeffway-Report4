@@ -130,6 +130,21 @@ function Symbols({ t, onOpenLibrary, onNeedKey }: { t: Takeoff; onOpenLibrary: (
             <Search size={14} />
             <input className="input" placeholder="Find a symbol" value={q} onChange={(e) => setQ(e.target.value)} />
           </div>
+          <MenuButton label="Clear marks" className="icon-btn" align="right" trigger={<Eraser size={15} />}>
+            {(close) => (
+              <>
+                <div className="label eyebrow">Start over · symbols and samples are kept</div>
+                <button className="menu-item danger" onClick={() => { close(); t.clearMarks("sheet"); }}>
+                  <Eraser size={15} />
+                  <span className="meta">Clear all marks on this sheet<small>Includes approved marks</small></span>
+                </button>
+                <button className="menu-item danger" onClick={() => { close(); t.clearMarks("all"); }}>
+                  <Trash size={15} />
+                  <span className="meta">Clear all marks on every sheet<small>The whole house type</small></span>
+                </button>
+              </>
+            )}
+          </MenuButton>
           <MenuButton label="Add symbol" className="icon-btn" align="right" trigger={<Plus size={16} />}>
             {(close) => (
               <>
