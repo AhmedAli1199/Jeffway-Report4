@@ -1,10 +1,9 @@
-import { useEffect, useMemo, useState } from "react";
-import { Cable, CheckCheck, Info, LoaderCircle, Minus, Plus, RefreshCw, Sparkles, Trash } from "lucide-react";
-import { api } from "../lib/api";
+import { useMemo } from "react";
+import { Cable, CheckCheck, Info, Minus, Plus, Sparkles } from "lucide-react";
 import type { Takeoff } from "../state/useTakeoff";
 import type { LegendItem } from "../lib/types";
 import { FIX_STAGES } from "../lib/util";
-import { SymbolSample } from "./ui";
+import { AuditList } from "./AuditLog";
 
 export type RightTab = "quantities" | "plots" | "ai";
 
@@ -31,7 +30,11 @@ export function Inspector({ t, tab, setTab, onAICheck }: Props) {
       </div>
       {tab === "quantities" && <Quantities t={t} onAICheck={onAICheck} />}
       {tab === "plots" && <Plots t={t} />}
-      {tab === "ai" && <AILog />}
+      {tab === "ai" && (
+        <div className="scroll grow" style={{ padding: "10px 14px" }}>
+          <AuditList compact />
+        </div>
+      )}
     </div>
   );
 }
@@ -278,105 +281,3 @@ function Plots({ t }: { t: Takeoff }) {
   );
 }
 
-interface LogEntry {
-  id: string;
-  timestamp: string;
-  legend_label: string;
-  template_image_b64?: string;
-  model_used?: string;
-  verifications?: { marker_id: string; is_valid: boolean; confidence: number; reason: string }[];
-}
-
-function AILog() {
-  const [logs, setLogs] = useState<LogEntry[] | null>(null);
-  const [err, setErr] = useState("");
-  const [open, setOpen] = useState<string | null>(null);
-
-  const load = () => {
-    setErr("");
-    api
-      .auditLogs()
-      .then((r) => setLogs(r.logs as unknown as LogEntry[]))
-      .catch((e) => setErr((e as Error).message));
-  };
-  useEffect(load, []);
-
-  return (
-    <div className="scroll grow">
-      <div className="section">
-        <div className="section-head">
-          <span className="eyebrow">Every AI decision, newest first</span>
-          <div className="row" style={{ gap: 2 }}>
-            <button className="icon-btn icon-btn-sm" title="Refresh" aria-label="Refresh" onClick={load}>
-              <RefreshCw size={13} />
-            </button>
-            <button
-              className="icon-btn icon-btn-sm"
-              title="Clear log"
-              aria-label="Clear log"
-              onClick={async () => {
-                await api.clearAuditLogs();
-                load();
-              }}
-            >
-              <Trash size={13} />
-            </button>
-          </div>
-        </div>
-      </div>
-      {err && <p className="muted" style={{ padding: "0 14px" }}>{err}</p>}
-      {!logs && !err && (
-        <div className="empty">
-          <LoaderCircle size={18} className="spin" />
-        </div>
-      )}
-      {logs && logs.length === 0 && (
-        <div className="empty">
-          <h3>No AI checks yet</h3>
-          <p>When AI double-checks marks, each decision and its reason is kept here.</p>
-        </div>
-      )}
-      <div className="log">
-        {logs?.map((l) => {
-          const v = l.verifications ?? [];
-          const kept = v.filter((x) => x.is_valid).length;
-          return (
-            <div key={l.id} className="log-item">
-              <div className="head">
-                <div className="row" style={{ minWidth: 0 }}>
-                  {l.template_image_b64 && (
-                    <SymbolSample
-                      size={26}
-                      legend={{ legend_id: "", label: "", color: "var(--line-strong)", category: "", fix_stage: "2nd Fix", manufacturer: "", part_code: "", template_image_b64: l.template_image_b64 }}
-                    />
-                  )}
-                  <b className="truncate">{l.legend_label}</b>
-                </div>
-                <span className="muted mono" style={{ fontSize: 11 }}>{l.timestamp.slice(5, 16)}</span>
-              </div>
-              <div className="row">
-                <span className="pill pill-ok">Kept {kept}</span>
-                <span className="pill pill-reject">Removed {v.length - kept}</span>
-                <span className="muted" style={{ fontSize: 11.5 }}>{l.model_used}</span>
-              </div>
-              {v.length > 0 && (
-                <button className="btn btn-quiet btn-sm" style={{ justifySelf: "start", padding: 0 }} onClick={() => setOpen(open === l.id ? null : l.id)}>
-                  {open === l.id ? "Hide reasons" : "Show reasons"}
-                </button>
-              )}
-              {open === l.id &&
-                v.map((x) => (
-                  <p key={x.marker_id}>
-                    <span style={{ color: x.is_valid ? "var(--ok)" : "var(--reject)", fontWeight: 600 }}>
-                      {x.is_valid ? "Kept" : "Removed"} · {Math.round(x.confidence * 100)}%
-                    </span>{" "}
-                    {x.reason}
-                  </p>
-                ))}
-            </div>
-          );
-        })}
-      </div>
-    </div>
-  );
-}

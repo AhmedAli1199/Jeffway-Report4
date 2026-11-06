@@ -307,7 +307,10 @@ def verify_candidates_ai(req: VerifyCandidatesRequest):
         candidate_patches.append({
             "marker_id": m.get("marker_id"),
             "patch_b64": patch_b64,
-            "angle": angle
+            "angle": angle,
+            "confidence_score": m.get("confidence_score"),
+            "page_index": req.page_index,
+            "x": m.get("x"), "y": m.get("y"), "width": m.get("width"), "height": m.get("height"),
         })
 
     try:
@@ -344,8 +347,18 @@ def verify_candidates_ai(req: VerifyCandidatesRequest):
 @router.get("/audit-logs")
 def get_ai_audit_logs():
     """Returns the history of AI second-pass runs with exact images sent, prompts, and raw responses."""
-    from app.services.audit_logger import get_audit_logs
-    return {"logs": get_audit_logs()}
+    from app.services.audit_logger import get_audit_logs, summarize
+    return {"logs": [summarize(l) for l in get_audit_logs()]}
+
+
+@router.get("/audit-logs/{log_id}")
+def get_ai_audit_log(log_id: str):
+    """One AI call in full: reference images, every candidate crop, the prompt and the raw answer."""
+    from app.services.audit_logger import get_audit_log
+    log = get_audit_log(log_id)
+    if not log:
+        raise HTTPException(status_code=404, detail="Log not found")
+    return log
 
 @router.post("/clear-audit-logs")
 def clear_ai_audit_logs():

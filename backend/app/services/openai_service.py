@@ -378,20 +378,36 @@ class OpenAIService:
                         "confidence": float(v.get("confidence", 0.90)),
                         "reason": str(v.get("reason", "Verified by AI")),
                     }
+                    if v.get("suggested_reclassification"):
+                        res_item["suggested_reclassification"] = str(v["suggested_reclassification"])
                     all_results.append(res_item)
                     batch_results.append(res_item)
 
             # Record log for transparent inspector portal
             try:
                 from app.services.audit_logger import record_audit_log
+                from app.services import cost_ledger
                 record_audit_log(
                     legend_label=legend_label,
                     template_b64=template_raw_b64,
-                    candidates=[{"marker_id": c["marker_id"], "patch_b64": c["patch_b64"], "index": i + 1} for i, c in enumerate(batch)],
+                    template_strip_b64=template_strip_b64,
+                    candidates=[
+                        {
+                            "marker_id": c["marker_id"],
+                            "patch_b64": c["patch_b64"],
+                            "index": i + 1,
+                            "angle": c.get("angle"),
+                            "confidence_score": c.get("confidence_score"),
+                            "page_index": c.get("page_index"),
+                        }
+                        for i, c in enumerate(batch)
+                    ],
                     prompt_text=system_instruction,
                     raw_response=content,
                     verifications=batch_results,
-                    model_used=model_used
+                    model_used=model_used,
+                    usage=cost_ledger.price(model_used, getattr(response, "usage", None)),
+                    tag=cost_ledger.current_tag(),
                 )
             except Exception as log_err:
                 print(f"[AuditLogger Error] {log_err}")

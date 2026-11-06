@@ -43,7 +43,10 @@ def record_audit_log(
     prompt_text: str,
     raw_response: str,
     verifications: List[Dict[str, Any]],
-    model_used: str = "gpt-4o"
+    model_used: str = "gpt-4o",
+    template_strip_b64: str = "",
+    usage: Optional[Dict[str, Any]] = None,
+    tag: Optional[str] = None,
 ):
     logs = _load_logs()
     log_entry = {
@@ -55,7 +58,10 @@ def record_audit_log(
         "prompt_text": prompt_text,
         "raw_response": raw_response,
         "verifications": verifications,
-        "model_used": model_used
+        "model_used": model_used,
+        "template_strip_b64": template_strip_b64,
+        "usage": usage or {},
+        "tag": tag,
     }
     logs.insert(0, log_entry)
     if len(logs) > 100:
@@ -64,6 +70,29 @@ def record_audit_log(
 
 def get_audit_logs() -> List[Dict[str, Any]]:
     return _load_logs()
+
+
+def summarize(log: Dict[str, Any]) -> Dict[str, Any]:
+    """A log entry without its images, for the list view."""
+    v = log.get("verifications") or []
+    kept = sum(1 for x in v if x.get("is_valid"))
+    return {
+        "id": log.get("id"),
+        "timestamp": log.get("timestamp"),
+        "legend_label": log.get("legend_label"),
+        "model_used": log.get("model_used"),
+        "candidates": len(log.get("candidates") or []),
+        "answered": len(v),
+        "kept": kept,
+        "removed": len(v) - kept,
+        "cost": (log.get("usage") or {}).get("cost"),
+        "tag": log.get("tag"),
+        "error": "(Error)" in str(log.get("model_used") or ""),
+    }
+
+
+def get_audit_log(log_id: str) -> Optional[Dict[str, Any]]:
+    return next((l for l in _load_logs() if l.get("id") == log_id), None)
 
 def clear_audit_logs():
     _save_logs([])

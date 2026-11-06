@@ -162,6 +162,7 @@ export const api = {
   }) => postJson<{ verifications: Verification[] }>("/takeoff/verify-candidates-ai", payload, "AI check failed"),
 
   auditLogs: () => request<{ logs: AuditLog[] }>("/takeoff/audit-logs"),
+  auditLog: (id: string) => request<AuditLog>(`/takeoff/audit-logs/${q(id)}`, undefined, "Couldn't load that AI check"),
   clearAuditLogs: () => postJson<unknown>("/takeoff/clear-audit-logs", {}),
 
   scanLegend: (payload: { filepath: string; page_index: number; crop_coords?: Rect; api_key?: string }) =>

@@ -33,6 +33,17 @@ def set_tag(tag: Optional[str]) -> None:
     _ctx.tag = tag
 
 
+def current_tag() -> str:
+    return getattr(_ctx, "tag", None) or "workspace"
+
+
+def price(model: str, usage: Any) -> Dict[str, Any]:
+    pin = int(getattr(usage, "prompt_tokens", 0) or 0)
+    pout = int(getattr(usage, "completion_tokens", 0) or 0)
+    pi, po = PRICES.get(model, PRICES["gpt-4o"])
+    return {"input_tokens": pin, "output_tokens": pout, "cost": round(pin * pi / 1e6 + pout * po / 1e6, 6)}
+
+
 def _load() -> list:
     if not LEDGER.exists():
         return []

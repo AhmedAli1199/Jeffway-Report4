@@ -8,6 +8,8 @@ import { useToast } from "../lib/toast";
 import type { RunSettings, Tender, TenderHouseMarks, ThemePref } from "../lib/types";
 import { cx, isApproved } from "../lib/util";
 import { CostPill, refreshCosts, usd } from "./Costs";
+import { AuditList } from "./AuditLog";
+import { Modal } from "./ui";
 import type { AIEstimate } from "../lib/types";
 
 /* ------------------------------------------------------------------ shared */
@@ -781,6 +783,7 @@ function AIPanel({
   const [house, setHouse] = useState("");
   const [est, setEst] = useState<AIEstimate | null>(null);
   const [confirm, setConfirm] = useState(false);
+  const [showLog, setShowLog] = useState(false);
 
   useEffect(() => {
     let alive = true;
@@ -818,7 +821,15 @@ function AIPanel({
           <b>AI second pass</b>
           <span className="muted">checks borderline marks and removes the false ones</span>
         </span>
-        {spent > 0 && <span className="muted">Spent on this tender: <b className="mono" style={{ color: "var(--fg)" }}>{usd(spent)}</b></span>}
+        <span className="row">
+          {spent > 0 && <span className="muted">Spent on this tender: <b className="mono" style={{ color: "var(--fg)" }}>{usd(spent)}</b></span>}
+          <button className="btn btn-ghost btn-sm" onClick={() => setShowLog(true)}>AI decisions log</button>
+        </span>
+        {showLog && (
+          <Modal wide title="AI decisions" subtitle="Every AI call for this tender: open one to see the images it was sent and its verdict on each." onClose={() => setShowLog(false)}>
+            <AuditList tag={t.tender_id} />
+          </Modal>
+        )}
       </div>
       <div className="ai-grid">
         <div className="field">
