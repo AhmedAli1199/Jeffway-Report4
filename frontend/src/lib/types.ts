@@ -46,7 +46,8 @@ export type MarkerStatus =
   | "ai_verified"
   | "user_verified"
   | "needs_review"
-  | "manual_added";
+  | "manual_added"
+  | "possible_missed";
 
 export interface Marker extends Rect {
   marker_id: string;
@@ -118,7 +119,7 @@ export type ThemePref = "system" | "light" | "dark";
 export type CanvasMode = "paper" | "blueprint";
 
 export const APPROVED: MarkerStatus[] = ["user_verified", "manual_added"];
-export const OPEN: MarkerStatus[] = ["needs_review", "ai_unverified"];
+export const OPEN: MarkerStatus[] = ["needs_review", "ai_unverified", "possible_missed"];
 
 export interface SheetInfo {
   page_index: number;
@@ -207,6 +208,7 @@ export interface Tender {
   schedule?: { file: string; sheet: string; total: number; plots: Record<string, number>; unmatched: Record<string, number> } | null;
   ai_runs?: AIRun[];
   legend_entries_removed?: number;
+  layer_check?: { confirmed: number; down: number; possible_missed: number };
   settings: RunSettings;
   ai?: AIRun | null;
   duration_s?: number;

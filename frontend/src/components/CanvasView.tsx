@@ -240,7 +240,7 @@ export function CanvasView({ t, mode, themeKey, controlsRef, onScale }: Props) {
   const inv = 1 / view.scale;
 
   const statusColor = (m: Marker) =>
-    isApproved(m) ? colors.ok : m.status === "ai_verified" ? colors.ai : m.status === "needs_review" ? colors.review : null;
+    isApproved(m) ? colors.ok : m.status === "ai_verified" ? colors.ai : m.status === "needs_review" || m.status === "possible_missed" ? colors.review : null;
 
   const draftRect = draft ? normRect(draft.a, draft.b) : null;
   const draftColor = tool === "crop" ? colors.copper : tool === "exclude" ? colors.reject : colors.fg;
@@ -342,7 +342,7 @@ export function CanvasView({ t, mode, themeKey, controlsRef, onScale }: Props) {
                   stroke={col}
                   strokeWidth={hoverId === m.marker_id ? 2.5 : 1.75}
                   strokeScaleEnabled={false}
-                  dash={m.status === "needs_review" ? [5, 3] : undefined}
+                  dash={m.status === "needs_review" || m.status === "possible_missed" ? [5, 3] : undefined}
                 />
                 {st && (
                   <Circle

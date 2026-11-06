@@ -6,12 +6,13 @@ import type { Marker, Tender, TenderHouseMarks, ThemePref } from "../lib/types";
 import { cx, isApproved, store } from "../lib/util";
 import { PageHeader } from "./Tenders";
 
-export type QueueView = "left" | "unchecked" | "ai" | "all";
+export type QueueView = "left" | "unchecked" | "ai" | "missed" | "all";
 
 const VIEWS: { id: QueueView; label: string; hint: string }[] = [
   { id: "unchecked", label: "Not checked by AI", hint: "Unreviewed marks the AI hasn't confirmed: the ones that need a person" },
   { id: "ai", label: "AI-confirmed", hint: "Marks the AI kept: spot-check them or approve them all at once" },
   { id: "left", label: "Everything left", hint: "Every unreviewed mark at or above the score threshold" },
+  { id: "missed", label: "Possible misses", hint: "Items drawn on a symbol's own CAD layer that nothing counted: approve the real ones" },
   { id: "all", label: "All marks", hint: "Every mark at any score, including ones already approved" },
 ];
 
@@ -21,6 +22,7 @@ function inView(view: QueueView, m: Marker, threshold: number): boolean {
   if (view === "all") return true;
   if (done) return false;
   if (view === "ai") return m.status === "ai_verified";
+  if (view === "missed") return m.status === "possible_missed";
   if (m.confidence_score < threshold) return false;
   if (view === "unchecked") return m.status !== "ai_verified";
   return true;
@@ -129,7 +131,7 @@ export function ReviewQueue({
 
   // How many marks each view holds, for the current house type / symbol filter
   const viewCounts = useMemo(() => {
-    const c: Record<QueueView, number> = { left: 0, unchecked: 0, ai: 0, all: 0 };
+    const c: Record<QueueView, number> = { left: 0, unchecked: 0, ai: 0, missed: 0, all: 0 };
     for (const h of houses ?? []) {
       if (house && h.project_id !== house) continue;
       for (const m of h.markers) {
@@ -260,6 +262,8 @@ export function ReviewQueue({
     ai_audit_reason?: string;
     first_pass_score?: number;
     modifier_check?: { note: string; extra: string[]; missing: string[] };
+    layer_check?: { layer: string | null; verdict: "confirmed" | "ok" | "elsewhere" | "off" | "unknown" | "missed"; note: string };
+    first_pass_score_before_layer?: number;
     relabelled_from?: string;
   };
   const legendsInView = useMemo(() => {
@@ -441,6 +445,25 @@ export function ReviewQueue({
                     {meta.relabelled_from
                       ? ` Moved here from ${labels.get(meta.relabelled_from)?.label ?? "another symbol"}.`
                       : " Its score was lowered so it isn't counted unless you approve it."}
+                  </span>
+                </div>
+              )}
+              {meta.layer_check && meta.layer_check.verdict !== "ok" && meta.layer_check.verdict !== "unknown" && (
+                <div className="callout" style={meta.layer_check.verdict === "confirmed" ? undefined : { background: "var(--review-soft)" }}>
+                  {meta.layer_check.verdict === "confirmed" ? (
+                    <CircleCheck size={14} style={{ color: "var(--ok)" }} />
+                  ) : (
+                    <TriangleAlert size={14} style={{ color: "var(--review)" }} />
+                  )}
+                  <span>
+                    <b>CAD layer:</b> {meta.layer_check.note}.
+                    {meta.layer_check.verdict === "missed"
+                      ? " The matcher didn't count it. Approve it if it's a real fitting."
+                      : meta.layer_check.verdict === "confirmed"
+                        ? " Counted without an AI check."
+                        : meta.first_pass_score_before_layer != null
+                          ? ` Score lowered from ${Math.round(meta.first_pass_score_before_layer * 100)}% so it isn't counted unless you approve it.`
+                          : ""}
                   </span>
                 </div>
               )}

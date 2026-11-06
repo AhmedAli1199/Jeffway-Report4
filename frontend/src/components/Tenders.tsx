@@ -848,6 +848,16 @@ function Overview({
           </span>
         </div>
       </div>
+      {t.layer_check && (t.layer_check.down > 0 || t.layer_check.possible_missed > 0) && (
+        <div className="callout">
+          <Layers size={14} />
+          <span>
+            <b>CAD layer check (free):</b> {t.layer_check.down} borderline marks sit on the wrong drawing layer and were marked down,
+            so they don't go to the AI or into the count. {t.layer_check.confirmed > 0 && `${t.layer_check.confirmed} were confirmed by their layer. `}
+            {t.layer_check.possible_missed > 0 && `${t.layer_check.possible_missed} possible misses are waiting under "Possible misses" in the review queue.`}
+          </span>
+        </div>
+      )}
       {ai?.error && (
         <div className="callout" style={{ color: "var(--reject)" }}>
           <TriangleAlert size={14} />

@@ -461,6 +461,11 @@ def _run_inner(tid: str, s: Dict[str, Any]) -> None:
     match_syms = list(unique.values())
     templates = {id(sym): _decode_b64(sym["template_image_b64"]) for sym in match_syms}
     match_syms = [sym for sym in match_syms if templates[id(sym)] is not None]
+    # Symbols sharing one sample image are one item as far as CAD layers go
+    groups = {_legend_from_symbol(x)["legend_id"]: _legend_from_symbol(unique[x["template_image_b64"]])["legend_id"] for x in symbols}
+    from app.services import cad_layers
+    layer_know = cad_layers.LayerKnowledge(groups)
+    layer_stats = {"confirmed": 0, "down": 0, "possible_missed": 0}
 
     scales = [1.0] if s.get("quick") else [0.9, 1.0, 1.1]
     legends_all = [_legend_from_symbol(x) for x in symbols]
@@ -573,6 +578,22 @@ def _run_inner(tid: str, s: Dict[str, Any]) -> None:
                 modifiers.apply_to_sheet(pdf, page_index, clean, set(order))
             except Exception as e:
                 print(f"[pipeline] modifier check skipped: {e}")
+            # CAD layers (free second check): what layer each mark's strokes are on, learned per tender
+            try:
+                paths = cad_layers.sheet_paths(str(pdf), page_index)
+                if cad_layers.has_layers(paths):
+                    layer_know.learn(clean, paths)
+                    st = cad_layers.apply(clean, paths, layer_know, s["auto_high"])
+                    gaps = cad_layers.possible_missed(clean, paths, layer_know)
+                    for m in gaps:
+                        m.update({"marker_id": f"mk_{uuid.uuid4().hex[:8]}", "page_index": page_index,
+                                  "page_number": pg["page_number"], "room": "Unassigned"})
+                    clean.extend(gaps)
+                    layer_stats["confirmed"] += st["confirmed"]
+                    layer_stats["down"] += st["down"]
+                    layer_stats["possible_missed"] += len(gaps)
+            except Exception as e:
+                print(f"[pipeline] layer check skipped: {e}")
             added = _merge_sheet(pid, page_index, clean, zone)
             found_total += added
             _set_sheet_state(tid, skey, "done")
@@ -586,7 +607,7 @@ def _run_inner(tid: str, s: Dict[str, Any]) -> None:
 
     started = (load_tender(tid) or {}).get("progress", {}).get("started_at", time.time())
     done_sheets = sum(1 for v in ((load_tender(tid) or {}).get("sheet_state") or {}).values() if v == "done")
-    patch = dict(status="done", legend_entries_removed=legend_dropped, cancel=False,
+    patch = dict(status="done", legend_entries_removed=legend_dropped, cancel=False, layer_check=layer_stats,
                  schedule=(load_tender(tid) or {}).get("schedule"), settings={**s, "api_key": None},
                  finished_at=time.strftime("%Y-%m-%d %H:%M"), duration_s=round(time.time() - started))
     if ai_stats is not None:
