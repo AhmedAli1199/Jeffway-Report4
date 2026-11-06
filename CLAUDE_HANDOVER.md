@@ -147,6 +147,10 @@ Keyboard: A approve · X reject · J/K next/prev · ⇧J/⇧K next/prev sheet ·
 5. **Bands**: ≥ `auto_high` (0.85) strong, no AI · `ai_low`–`auto_high` (0.60–0.85) sent to AI (batches of 8, capped by `max_ai_marks`) · below `ai_low` kept but hidden by default · below `min_keep` (0.55) dropped. AI-kept marks take the AI's confidence; AI-rejected marks are deleted.
 6. **Review**: `GET /api/tenders/<id>/marks`, decisions via `POST /api/tenders/<id>/decision` (approve / reject / restore for undo), crops via `GET /api/tenders/crop/image`.
 
+7. **Accommodation schedule** (`services/schedule_service.py`): any xlsx/csv in the pack (names containing "accommodation"/"schedule" first) is scanned for a header row with a house-type column; one plot per row. Drawings match by normalised name; a drawing matching several variants sums them. Checked against Jeffway's filled Curo workbook: 208 plots, all named house types equal. Upload separately via `POST /api/tenders/<id>/schedule`.
+8. **AI on demand**: `ai_mode` "manual" (default) skips AI in the run. `POST /ai-estimate` returns marks / calls / estimated cost; `POST /ai-run` runs it in the background and merges results into the saved state without overwriting review decisions made meanwhile. Marks AI has seen are never re-sent.
+9. **Cost ledger** (`services/cost_ledger.py`, `data/ai_costs.json`): every OpenAI call records real token usage priced from `PRICES`; tagged per tender. `GET /api/tenders/costs/summary`. Estimates use the average of the last 50 real calls once 3+ exist (default $0.0175/call ≈ 4.2k in + 0.7k out on gpt-4o).
+
 Timing: ~1.4 s per symbol per sheet at 3 scales on 4 cores (~2 min for a 5-sheet house type); `quick` uses one scale (~3× faster).
 Demo walkthrough: `DEMO_SCRIPT.md`.
 

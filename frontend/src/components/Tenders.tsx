@@ -7,6 +7,8 @@ import { api, type PackFile } from "../lib/api";
 import { useToast } from "../lib/toast";
 import type { RunSettings, Tender, TenderHouseMarks, ThemePref } from "../lib/types";
 import { cx, isApproved } from "../lib/util";
+import { CostPill, refreshCosts, usd } from "./Costs";
+import type { AIEstimate } from "../lib/types";
 
 /* ------------------------------------------------------------------ shared */
 
@@ -22,6 +24,7 @@ export function PageHeader({
         Plotline
       </button>
       <nav className="crumbs grow">{children}</nav>
+      <CostPill />
       <button className="icon-btn" aria-label={`Theme: ${theme}`} title={`Theme: ${theme}`} onClick={() => setTheme(next)}>
         <Icon size={16} />
       </button>
@@ -257,7 +260,13 @@ export function TenderView({
       setT(x);
       if (x.status === "done") {
         setMarks((await api.tenderMarks(id)).house_types);
-        toast({ tone: "success", title: "Takeoff ready", body: "Everything is counted. Start the review queue." });
+        refreshCosts();
+        const failed = /failed/i.test(x.progress?.message ?? "");
+        toast(
+          x.ai?.at && (x.ai_runs?.length ?? 0) > 0 && x.progress?.message?.startsWith("AI")
+            ? { tone: failed ? "error" : "success", title: failed ? "AI check failed" : `AI kept ${x.ai?.kept}, removed ${x.ai?.removed}`, body: x.progress.message }
+            : { tone: "success", title: "Takeoff ready", body: "Everything is counted. Start the review queue." },
+        );
       }
     }, 1000);
     return () => clearInterval(h);
@@ -296,9 +305,12 @@ export function TenderView({
               onReview={onReview}
               onOpenDrawing={onOpenDrawing}
               onRerun={() => setT({ ...t, status: "uploaded" })}
+              apiKey={apiKey}
+              onAIStarted={(nt) => setT(nt)}
               onPlots={async (pid, n) => {
                 setMarks((ms) => ms?.map((h) => (h.project_id === pid ? { ...h, plots: n } : h)) ?? null);
-                await api.setPlots(id, pid, n).catch(() => {});
+                const nt = await api.setPlots(id, pid, n).catch(() => null);
+                if (nt) setT(nt);
               }}
             />
           ) : (
@@ -311,7 +323,14 @@ export function TenderView({
 }
 
 function RunPanel({ t, onRun, hasKey }: { t: Tender; onRun: (s: Partial<RunSettings>) => void; hasKey: boolean }) {
-  const [useAI, setUseAI] = useState(t.settings?.use_ai ?? true);
+  const [aiMode, setAiMode] = useState<"auto" | "manual" | "off">(
+    t.settings?.use_ai === false ? "off" : (t.settings?.ai_mode ?? "manual"),
+  );
+  const useAI = aiMode !== "off";
+  const [schedule, setSchedule] = useState(t.schedule ?? null);
+  const [houses, setHouses] = useState(t.house_types);
+  const schedRef = useRef<HTMLInputElement>(null);
+  const toast = useToast();
   const [quick, setQuick] = useState(t.settings?.quick ?? false);
   const [high, setHigh] = useState(t.settings?.auto_high ?? 0.85);
   const [low, setLow] = useState(t.settings?.ai_low ?? 0.6);
@@ -341,7 +360,7 @@ function RunPanel({ t, onRun, hasKey }: { t: Tender; onRun: (s: Partial<RunSetti
             <span className="eyebrow">House types</span>
           </div>
           <div className="list" style={{ padding: 0 }}>
-            {t.house_types.map((h) => (
+            {houses.map((h) => (
               <div key={h.project_id} className="item" style={{ cursor: "default" }}>
                 <span className="tender-icon"><FileText size={15} /></span>
                 <span className="meta">
@@ -349,9 +368,39 @@ function RunPanel({ t, onRun, hasKey }: { t: Tender; onRun: (s: Partial<RunSetti
                   <span className="sub">{h.electrical_pages.map((p) => p.title || `p.${p.page_number}`).join(" · ")}</span>
                 </span>
                 <span className="badge-count">{h.electrical_pages.length} sheets</span>
+                <PlotsBadge h={h} />
               </div>
             ))}
             {t.house_types.length === 0 && <p className="muted">No drawings with electrical sheets were found.</p>}
+          </div>
+          <div className={cx("callout", schedule && "ok")}>
+            <FileText size={14} />
+            <span className="grow">
+              {schedule ? (
+                <>
+                  <b>Accommodation schedule:</b> {schedule.file.split("/").pop()} · {schedule.total} plots ·{" "}
+                  {houses.filter((h) => h.plots_source?.file).length} of {houses.length} house types matched
+                </>
+              ) : (
+                <>No accommodation schedule found in the pack, so every house type starts at 1 plot.</>
+              )}
+            </span>
+            <button className="btn btn-ghost btn-sm" onClick={() => schedRef.current?.click()}>
+              {schedule ? "Replace" : "Add schedule"}
+            </button>
+            <input ref={schedRef} type="file" hidden accept=".xlsx,.xlsm,.csv" onChange={async (e) => {
+              const f = e.target.files?.[0];
+              e.target.value = "";
+              if (!f) return;
+              try {
+                const nt = await api.uploadSchedule(t.tender_id, f);
+                setSchedule(nt.schedule ?? null);
+                setHouses(nt.house_types);
+                toast({ tone: "success", title: "Plots read from the schedule" });
+              } catch (err) {
+                toast({ tone: "error", title: "Couldn't read that schedule", body: (err as Error).message });
+              }
+            }} />
           </div>
           {t.documents.length > 0 && (
             <>
@@ -373,16 +422,21 @@ function RunPanel({ t, onRun, hasKey }: { t: Tender; onRun: (s: Partial<RunSetti
           <div className="section-head">
             <span className="eyebrow">How to run</span>
           </div>
-          <label className="toggle-row">
-            <input type="checkbox" checked={useAI} onChange={(e) => setUseAI(e.target.checked)} />
-            <span>
-              <b>AI second pass on borderline marks</b>
-              <small>
-                Only marks scoring {Math.round(low * 100)}–{Math.round(high * 100)}% go to AI. Strong matches skip it.
-                {!hasKey && " Uses the server's OpenAI key."}
-              </small>
+          <div className="field">
+            <label>AI second pass on borderline marks ({Math.round(low * 100)}–{Math.round(high * 100)}%)</label>
+            <div className="seg" role="group" style={{ justifySelf: "start" }}>
+              <button type="button" aria-pressed={aiMode === "manual"} onClick={() => setAiMode("manual")}>Later, when I choose</button>
+              <button type="button" aria-pressed={aiMode === "auto"} onClick={() => setAiMode("auto")}>Right after counting</button>
+              <button type="button" aria-pressed={aiMode === "off"} onClick={() => setAiMode("off")}>Off</button>
+            </div>
+            <span className="hint">
+              {aiMode === "manual"
+                ? "Counting finishes with no AI spend. You see exactly how many marks AI would check, and the estimated cost, before you run it."
+                : aiMode === "auto"
+                  ? `AI runs straight after counting, up to the budget below.${hasKey ? "" : " Uses the server's OpenAI key."}`
+                  : "No AI. Borderline marks wait for a person."}
             </span>
-          </label>
+          </div>
           <label className="toggle-row">
             <input type="checkbox" checked={quick} onChange={(e) => setQuick(e.target.checked)} />
             <span>
@@ -411,7 +465,7 @@ function RunPanel({ t, onRun, hasKey }: { t: Tender; onRun: (s: Partial<RunSetti
                 <input id="high" type="range" className="slider" min={0.75} max={0.95} step={0.01} value={high} onChange={(e) => setHigh(Number(e.target.value))} />
               </div>
             </div>
-            {useAI && (
+            {aiMode === "auto" && (
               <div className="field">
                 <label htmlFor="cap">AI budget: at most {cap} marks (≈ {Math.ceil(cap / 8)} AI calls)</label>
                 <input id="cap" type="range" className="slider" min={50} max={1500} step={50} value={cap} onChange={(e) => setCap(Number(e.target.value))} />
@@ -421,7 +475,7 @@ function RunPanel({ t, onRun, hasKey }: { t: Tender; onRun: (s: Partial<RunSetti
           <button
             className="btn btn-copper btn-lg"
             disabled={!t.house_types.length}
-            onClick={() => onRun({ use_ai: useAI, quick, auto_high: high, ai_low: low, max_ai_marks: cap })}
+            onClick={() => onRun({ use_ai: useAI, ai_mode: aiMode === "auto" ? "auto" : "manual", quick, auto_high: high, ai_low: low, max_ai_marks: cap })}
           >
             <Play size={15} /> Run full takeoff
           </button>
@@ -448,7 +502,7 @@ function Progress({ t }: { t: Tender }) {
     <div className="stack" style={{ maxWidth: 680, margin: "40px auto" }}>
       <div className="hero-block">
         <span className="eyebrow">Step 2 of 2 · Running · {Math.floor(secs / 60)}:{String(secs % 60).padStart(2, "0")}</span>
-        <h1>Counting {t.name}</h1>
+        <h1>{p.ai_only ? `AI is checking ${t.name}` : `Counting ${t.name}`}</h1>
       </div>
       <div className="card">
         <ol className="stages">
@@ -483,7 +537,7 @@ function Progress({ t }: { t: Tender }) {
 }
 
 function Overview({
-  t, marks, threshold, setThreshold, onReview, onOpenDrawing, onRerun, onPlots,
+  t, marks, threshold, setThreshold, onReview, onOpenDrawing, onRerun, onPlots, apiKey, onAIStarted,
 }: {
   t: Tender;
   marks: TenderHouseMarks[];
@@ -493,6 +547,8 @@ function Overview({
   onOpenDrawing: (ht: { project_id: string; name: string; filepath: string }, page?: number) => void;
   onRerun: () => void;
   onPlots: (pid: string, n: number) => void;
+  apiKey: string;
+  onAIStarted: (t: Tender) => void;
 }) {
   const [open, setOpen] = useState<string | null>(marks[0]?.project_id ?? null);
 
@@ -559,11 +615,13 @@ function Overview({
         <div className="tile">
           <b>{ai ? ai.kept + ai.removed : "–"}</b>
           <span>
-            {ai && t.settings.use_ai
+            {ai
               ? ai.error && !ai.checked
-                ? "AI check failed"
+                ? "Last AI check failed"
                 : `AI checked · kept ${ai.kept}, removed ${ai.removed}`
-              : "AI check off"}
+              : t.settings?.use_ai === false
+                ? "AI check off"
+                : "AI not run yet · see below"}
           </span>
         </div>
         <div className="tile accent"><b>{data.toReview}</b><span>Waiting for you · {data.approved} approved</span></div>
@@ -576,6 +634,8 @@ function Overview({
           </span>
         </div>
       )}
+
+      <AIPanel t={t} apiKey={apiKey} onStarted={onAIStarted} />
 
       <div className="card row" style={{ gap: 16 }}>
         <span className="eyebrow" style={{ whiteSpace: "nowrap" }}>Count marks scoring at least</span>
@@ -610,7 +670,10 @@ function Overview({
                 {isOpen && (
                   <div className="ht-body">
                     <div className="row" style={{ justifyContent: "space-between" }}>
-                      <span className="muted">Plots of this type</span>
+                      <span className="muted row" style={{ gap: 6 }}>
+                        Plots
+                        <PlotsBadge h={{ plots: h.plots, plots_source: t.house_types.find((x) => x.project_id === h.project_id)?.plots_source }} />
+                      </span>
                       <div className="row" style={{ gap: 2 }}>
                         <button className="icon-btn icon-btn-sm" aria-label="Fewer plots" onClick={() => onPlots(h.project_id, Math.max(1, h.plots - 1))}><Minus size={13} /></button>
                         <input className="input mono" style={{ width: 52, height: 26, textAlign: "center" }} type="number" min={1} value={h.plots}
@@ -690,6 +753,117 @@ function Overview({
         <Sparkles size={12} /> Counts include approved marks plus unreviewed marks at or above the threshold. Approve or delete them in the
         review queue to firm up the numbers.
       </p>
+    </div>
+  );
+}
+
+function PlotsBadge({ h }: { h: { plots: number; plots_source?: { file?: string; matched?: string[]; manual?: boolean } | null } }) {
+  const src = h.plots_source;
+  const title = src?.file
+    ? `From ${src.file}: ${src.matched?.join(" + ")}`
+    : src?.manual
+      ? "Set by hand"
+      : "Not found in the accommodation schedule";
+  return (
+    <span className={cx("pill", src?.file ? "pill-ok" : src?.manual ? "pill-plain" : "pill-review")} title={title}>
+      {h.plots} plot{h.plots === 1 ? "" : "s"}
+    </span>
+  );
+}
+
+function AIPanel({
+  t, onStarted, apiKey,
+}: { t: Tender; onStarted: (t: Tender) => void; apiKey: string }) {
+  const toast = useToast();
+  const [low, setLow] = useState(t.settings?.ai_low ?? 0.6);
+  const [high, setHigh] = useState(t.settings?.auto_high ?? 0.85);
+  const [cap, setCap] = useState(0);
+  const [house, setHouse] = useState("");
+  const [est, setEst] = useState<AIEstimate | null>(null);
+  const [confirm, setConfirm] = useState(false);
+
+  useEffect(() => {
+    let alive = true;
+    const h = setTimeout(() => {
+      api
+        .aiEstimate(t.tender_id, { ai_low: low, auto_high: high, max_ai_marks: cap, project_ids: house ? [house] : undefined })
+        .then((e) => alive && setEst(e))
+        .catch(() => {});
+    }, 200);
+    return () => {
+      alive = false;
+      clearTimeout(h);
+    };
+  }, [t.tender_id, low, high, cap, house, t.ai_runs?.length]);
+
+  const spent = (t.ai_runs ?? []).reduce((n, r) => n + (r.cost ?? 0), 0);
+
+  const start = async () => {
+    try {
+      const nt = await api.aiRun(t.tender_id, {
+        ai_low: low, auto_high: high, max_ai_marks: cap, api_key: apiKey || undefined, project_ids: house ? [house] : undefined,
+      });
+      setConfirm(false);
+      onStarted(nt);
+    } catch (e) {
+      toast({ tone: "error", title: "Couldn't start the AI check", body: (e as Error).message });
+    }
+  };
+
+  return (
+    <div className="card ai-panel">
+      <div className="section-head">
+        <span className="row" style={{ gap: 8 }}>
+          <Sparkles size={16} style={{ color: "var(--ai)" }} />
+          <b>AI second pass</b>
+          <span className="muted">checks borderline marks and removes the false ones</span>
+        </span>
+        {spent > 0 && <span className="muted">Spent on this tender: <b className="mono" style={{ color: "var(--fg)" }}>{usd(spent)}</b></span>}
+      </div>
+      <div className="ai-grid">
+        <div className="field">
+          <label htmlFor="ai-low">Marks scoring from {Math.round(low * 100)}%</label>
+          <input id="ai-low" type="range" className="slider" min={0.55} max={0.84} step={0.01} value={low} onChange={(e) => setLow(Math.min(Number(e.target.value), high - 0.01))} />
+        </div>
+        <div className="field">
+          <label htmlFor="ai-high">up to {Math.round(high * 100)}%</label>
+          <input id="ai-high" type="range" className="slider" min={0.7} max={1} step={0.01} value={high} onChange={(e) => setHigh(Math.max(Number(e.target.value), low + 0.01))} />
+        </div>
+        <div className="field">
+          <label htmlFor="ai-house">House types</label>
+          <select id="ai-house" className="select" value={house} onChange={(e) => setHouse(e.target.value)}>
+            <option value="">All</option>
+            {t.house_types.map((h) => <option key={h.project_id} value={h.project_id}>{h.name}</option>)}
+          </select>
+        </div>
+        <div className="field">
+          <label htmlFor="ai-cap">Budget: {cap ? `at most ${cap} marks` : "no limit"}</label>
+          <input id="ai-cap" type="range" className="slider" min={0} max={Math.max(50, est?.available ?? 50)} step={10} value={cap} onChange={(e) => setCap(Number(e.target.value))} />
+        </div>
+      </div>
+      <div className="estimate">
+        <div><b className="mono">{est?.marks ?? "–"}</b><span>marks to check{est && est.available > est.marks ? ` of ${est.available}` : ""}</span></div>
+        <div><b className="mono">{est?.calls ?? "–"}</b><span>AI calls</span></div>
+        <div className="accent"><b className="mono">{est ? usd(est.estimated_cost) : "–"}</b><span>estimated cost</span></div>
+        <div className="grow" style={{ textAlign: "right" }}>
+          {confirm ? (
+            <span className="row" style={{ justifyContent: "flex-end" }}>
+              <span className="muted">Spend about {usd(est?.estimated_cost)}?</span>
+              <button className="btn btn-copper" onClick={start}>Yes, run it</button>
+              <button className="btn btn-ghost" onClick={() => setConfirm(false)}>Cancel</button>
+            </span>
+          ) : (
+            <button className="btn btn-primary btn-lg" disabled={!est?.marks} onClick={() => setConfirm(true)}>
+              <Sparkles size={15} /> Run AI check
+            </button>
+          )}
+        </div>
+      </div>
+      <span className="muted" style={{ fontSize: 12 }}>
+        {usd(est?.cost_per_call, 3)} per call of up to 8 marks ({est?.basis ?? "estimate"}). Marks AI has already seen are not sent again.
+        {(t.ai_runs ?? []).length > 0 &&
+          ` Previous runs: ${(t.ai_runs ?? []).map((r) => (r.error && !r.checked ? `${r.at ?? ""} failed` : `${r.at ?? ""} kept ${r.kept}, removed ${r.removed}, ${usd(r.cost)}`)).join(" · ")}`}
+      </span>
     </div>
   );
 }

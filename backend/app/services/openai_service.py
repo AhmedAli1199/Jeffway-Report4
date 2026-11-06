@@ -56,6 +56,15 @@ def generate_multi_orientation_template_b64(template_img_path: str | Path) -> st
         print(f"[MultiAngle Template Strip Error] {e}")
         return encode_image_to_base64(template_img_path)
 
+def _record_cost(model_name: str, resp) -> None:
+    try:
+        from app.services import cost_ledger
+        if getattr(resp, "usage", None) is not None:
+            cost_ledger.record(model_name, resp.usage)
+    except Exception as e:  # never let bookkeeping break a check
+        print(f"[cost_ledger] {e}")
+
+
 def create_vision_chat_completion(client: OpenAI, messages: list, **kwargs):
     """
     Executes completion using OpenAI's premier vision model (gpt-4o for maximum optical acuity on CAD drawings),
@@ -75,6 +84,7 @@ def create_vision_chat_completion(client: OpenAI, messages: list, **kwargs):
                 messages=messages,
                 **call_kwargs
             )
+            _record_cost(model_name, resp)
             return resp, model_name
         except Exception as e:
             err_msg = str(e).lower()
@@ -87,6 +97,7 @@ def create_vision_chat_completion(client: OpenAI, messages: list, **kwargs):
                         messages=messages,
                         **call_kwargs
                     )
+                    _record_cost(model_name, resp)
                     return resp, model_name
                 except Exception as retry_err:
                     err_msg = str(retry_err).lower()

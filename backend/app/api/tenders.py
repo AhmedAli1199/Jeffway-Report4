@@ -37,6 +37,7 @@ async def upload_tender(
 
 class RunRequest(BaseModel):
     use_ai: bool = True
+    ai_mode: str = "manual"
     auto_high: float = 0.85
     ai_low: float = 0.60
     min_keep: float = 0.55
@@ -54,6 +55,47 @@ def run_tender(tender_id: str, req: RunRequest):
     except RuntimeError as e:
         raise HTTPException(409, str(e))
     return t
+
+
+class AIRequest(BaseModel):
+    ai_low: float = 0.60
+    auto_high: float = 0.85
+    max_ai_marks: int = 0
+    api_key: Optional[str] = None
+    project_ids: Optional[List[str]] = None
+    legend_ids: Optional[List[str]] = None
+
+
+@router.post("/{tender_id}/ai-estimate")
+def ai_estimate(tender_id: str, r: AIRequest):
+    if not ps.load_tender(tender_id):
+        raise HTTPException(404, "Tender not found")
+    return ps.estimate_ai(tender_id, r.ai_low, r.auto_high, r.max_ai_marks, r.project_ids, r.legend_ids)
+
+
+@router.post("/{tender_id}/ai-run")
+def ai_run(tender_id: str, r: AIRequest):
+    if not ps.load_tender(tender_id):
+        raise HTTPException(404, "Tender not found")
+    try:
+        return ps.start_ai_run(
+            tender_id,
+            {"ai_low": r.ai_low, "auto_high": r.auto_high, "max_ai_marks": r.max_ai_marks, "api_key": r.api_key, "use_ai": True},
+            r.project_ids,
+            r.legend_ids,
+        )
+    except RuntimeError as e:
+        raise HTTPException(409, str(e))
+
+
+@router.post("/{tender_id}/schedule")
+async def upload_schedule(tender_id: str, file: UploadFile = File(...)):
+    if not ps.load_tender(tender_id):
+        raise HTTPException(404, "Tender not found")
+    try:
+        return ps.apply_schedule_file(tender_id, file.filename or "schedule.xlsx", file.file)
+    except ValueError as e:
+        raise HTTPException(400, str(e))
 
 
 @router.get("/{tender_id}")
@@ -125,3 +167,12 @@ def crop(filepath: str, page_index: int, x: float, y: float, w: float, h: float,
     buf = io.BytesIO()
     c.save(buf, format="PNG")
     return Response(buf.getvalue(), media_type="image/png", headers={"Cache-Control": "max-age=86400"})
+
+
+@router.get("/costs/summary")
+def costs():
+    from app.services import cost_ledger
+    names = {t["tender_id"]: t["name"] for t in ps.list_tenders()}
+    s = cost_ledger.summary(names)
+    s["cost_per_call"], s["estimate_basis"] = cost_ledger.cost_per_call()
+    return s

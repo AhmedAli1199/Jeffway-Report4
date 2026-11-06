@@ -34,3 +34,8 @@ From the drawing view, **Export → Master tender workbook**.
 ## If something goes wrong
 - No AI key: the run still completes. Borderline marks are kept for human review and the overview says why.
 - A symbol is missing from the library: open the house type's drawings, press **C**, crop one example, **Save and count**.
+
+## Plots and AI spend (added)
+- **Plots come from the accommodation schedule.** Include the schedule spreadsheet (xlsx/csv) in the pack, or add it on the run screen. Plotline finds the house-type column, counts plots per type and matches them to the drawings. Variants are summed, so "Ashton" = Ashton v1 + v2. Green plot pills came from the schedule; amber ones weren't found in it. You can always override by hand.
+- **AI runs when you choose (default).** Counting costs nothing. On the overview, the **AI second pass** panel shows how many marks it would check, how many calls that is, and the estimated cost, before you click **Run AI check**. You can limit it to one house type or set a budget.
+- **Spend tracker.** The pill in the top bar shows today's and all-time AI spend. Click it for spend per tender, per day and per call. Costs are priced from the real token counts OpenAI returns.

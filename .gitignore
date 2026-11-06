@@ -56,3 +56,4 @@ __MACOSX/
 backend/data/tenders/
 backend/data/projects/proj_*/
 !backend/data/projects/proj_avebury_curo/
+backend/data/ai_costs.json

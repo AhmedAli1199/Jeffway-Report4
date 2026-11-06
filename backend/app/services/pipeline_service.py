@@ -39,6 +39,7 @@ TENDERS_DIR.mkdir(parents=True, exist_ok=True)
 
 DEFAULT_SETTINGS = {
     "use_ai": True,
+    "ai_mode": "manual",  # auto: AI runs right after the first pass; manual: you start it from the overview
     "auto_high": 0.85,
     "ai_low": 0.60,
     "min_keep": 0.55,
@@ -190,7 +191,64 @@ def scan_pack(tid: str) -> None:
             ],
             "plots": 1,
         })
+    _apply_schedule(tid, house_types, documents)
     update_tender(tid, house_types=house_types, documents=documents)
+
+
+def _apply_schedule(tid: str, house_types: List[Dict[str, Any]], documents: List[Dict[str, Any]],
+                    path: Optional[Path] = None) -> Optional[Dict[str, Any]]:
+    """Find the accommodation schedule in the pack and set plots per house type from it."""
+    from app.services import schedule_service as sch
+
+    pack = TENDERS_DIR / tid / "pack"
+    cands = [path] if path else sch.find_schedule(pack)
+    for c in cands:
+        try:
+            parsed = sch.parse_schedule(c)
+        except Exception as e:
+            print(f"[schedule] {c.name}: {e}")
+            continue
+        if not parsed:
+            continue
+        used = set()
+        for ht in house_types:
+            hit = sch.plots_for(ht["name"], parsed["plots"])
+            if hit:
+                ht["plots"] = hit["plots"]
+                ht["plots_source"] = {"file": c.name, "matched": hit["matched"]}
+                used.update(hit["matched"])
+            else:
+                ht.setdefault("plots", 1)
+                ht["plots_source"] = None
+        info = {
+            "file": str(c.relative_to(pack)) if pack in c.parents else c.name,
+            "sheet": parsed["sheet"],
+            "total": parsed["total"],
+            "plots": parsed["plots"],
+            "unmatched": {k: v for k, v in parsed["plots"].items() if k not in used},
+        }
+        with _lock:
+            t = load_tender(tid) or {}
+            t["schedule"] = info
+            save_tender(t)
+        return info
+    return None
+
+
+def apply_schedule_file(tid: str, filename: str, fobj) -> Dict[str, Any]:
+    """A schedule uploaded separately from the pack."""
+    dest = TENDERS_DIR / tid / "pack" / "_schedule" / _safe_rel(filename).name
+    dest.parent.mkdir(parents=True, exist_ok=True)
+    with open(dest, "wb") as out:
+        shutil.copyfileobj(fobj, out)
+    t = load_tender(tid)
+    info = _apply_schedule(tid, t["house_types"], t["documents"], dest)
+    if not info:
+        raise ValueError("Couldn't find a house-type column in that file")
+    t2 = load_tender(tid)
+    t2["house_types"] = t["house_types"]
+    save_tender(t2)
+    return t2
 
 
 # ---------------------------------------------------------------- pipeline
@@ -457,79 +515,11 @@ def _run_inner(tid: str, s: Dict[str, Any]) -> None:
             m["status"] = "ai_unverified" if m["confidence_score"] >= s["auto_high"] else "needs_review"
             marks_by_project[pid].append(m)
 
-    # ---- AI second pass on the borderline band only
-    ai_stats = {"checked": 0, "kept": 0, "removed": 0, "calls": 0, "skipped": 0, "error": None}
-    if s.get("use_ai"):
-        band = [
-            (pid, m)
-            for pid, ms in marks_by_project.items()
-            for m in ms
-            if s["ai_low"] <= m["confidence_score"] < s["auto_high"]
-        ]
-        # Spend the budget on the most promising marks first
-        band.sort(key=lambda x: -x[1]["confidence_score"])
-        cap = int(s.get("max_ai_marks") or 0)
-        if cap and len(band) > cap:
-            ai_stats["skipped"] = len(band) - cap
-            band = band[:cap]
-        groups: Dict[tuple, List[Dict[str, Any]]] = {}
-        for pid, m in band:
-            groups.setdefault((pid, m["page_index"], m["legend_id"]), []).append(m)
-
-        ht_by_id = {ht["project_id"]: ht for ht in house_types}
-        sym_by_id = {_legend_from_symbol(x)["legend_id"]: x for x in symbols}
-        legends_all = [_legend_from_symbol(x) for x in symbols]
-        _progress(tid, stage="ai", message="AI is checking borderline marks…", done=0, total=len(band))
-        removed_ids: set = set()
-        checked = 0
-        from app.api.takeoff import VerifyCandidatesRequest, verify_candidates_ai, LegendItem
-
-        def ai_job(key, ms):
-            pid, page_index, legend_id = key
-            leg = _legend_from_symbol(sym_by_id[legend_id])
-            leg_payload = {**leg, "template_crop_coords": None}
-            req = VerifyCandidatesRequest(
-                filepath=ht_by_id[pid]["filepath"],
-                page_index=page_index,
-                legend=LegendItem(**leg_payload),
-                markers=ms,
-                api_key=s.get("api_key"),
-                all_legends=[LegendItem(**{**x, "template_crop_coords": None, "template_image_b64": None}) for x in legends_all],
-                excluded_zones=[zones[(pid, page_index)]] if zones.get((pid, page_index)) else [],
-            )
-            return key, ms, verify_candidates_ai(req)
-
-        with ThreadPoolExecutor(max_workers=3) as ex:
-            futs = [ex.submit(ai_job, k, ms) for k, ms in groups.items()]
-            for fut in as_completed(futs):
-                try:
-                    key, ms, res = fut.result()
-                except Exception as e:
-                    ai_stats["error"] = str(getattr(e, "detail", e))
-                    continue
-                ai_stats["calls"] += max(1, (len(ms) + 7) // 8)
-                by_id = {v["marker_id"]: v for v in res.get("verifications", [])}
-                for m in ms:
-                    v = by_id.get(m["marker_id"])
-                    if not v:
-                        continue  # deduped or excluded by the verifier; leave for the human
-                    ai_stats["checked"] += 1
-                    if v.get("is_valid"):
-                        ai_stats["kept"] += 1
-                        m["status"] = "ai_verified"
-                        m["metadata"] = {
-                            "first_pass_score": m["confidence_score"],
-                            "ai_audit_reason": v.get("reason"),
-                            "ai_audit_confidence": v.get("confidence"),
-                        }
-                        m["confidence_score"] = round(float(v.get("confidence") or m["confidence_score"]), 3)
-                    else:
-                        ai_stats["removed"] += 1
-                        removed_ids.add(m["marker_id"])
-                checked += len(ms)
-                _progress(tid, done=checked, total=len(band), message=f"AI checked {checked} of {len(band)} borderline marks")
-        for pid in marks_by_project:
-            marks_by_project[pid] = [m for m in marks_by_project[pid] if m["marker_id"] not in removed_ids]
+    # ---- AI second pass on the borderline band only (auto mode)
+    ai_stats = None
+    if s.get("use_ai") and s.get("ai_mode", "auto") == "auto":
+        zones_first = {k: v for k, v in zones.items() if v}
+        ai_stats = _ai_pass(tid, s, house_types, marks_by_project, zones_first, symbols)
 
     # ---- Write one project per house type
     _progress(tid, stage="saving", message="Saving results…")
@@ -561,9 +551,205 @@ def _run_inner(tid: str, s: Dict[str, Any]) -> None:
         })
 
     started = (load_tender(tid) or {}).get("progress", {}).get("started_at", time.time())
-    update_tender(tid, status="done", ai=ai_stats, legend_entries_removed=legend_dropped, settings={**s, "api_key": None},
+    update_tender(tid, status="done", ai=ai_stats, legend_entries_removed=legend_dropped,
+                  schedule=(load_tender(tid) or {}).get("schedule"), settings={**s, "api_key": None},
                   finished_at=time.strftime("%Y-%m-%d %H:%M"), duration_s=round(time.time() - started))
     _progress(tid, stage="done", message="Takeoff ready for review", done=total, total=total)
+
+
+# ---------------------------------------------------------------- AI second pass
+
+def _ai_candidates(marks_by_project: Dict[str, List[Dict[str, Any]]], low: float, high: float,
+                   project_ids: Optional[List[str]] = None, legend_ids: Optional[List[str]] = None) -> List[tuple]:
+    """Borderline marks nobody has decided on and AI hasn't seen yet, best first."""
+    band = []
+    for pid, ms in marks_by_project.items():
+        if project_ids and pid not in project_ids:
+            continue
+        for m in ms:
+            if legend_ids and m["legend_id"] not in legend_ids:
+                continue
+            if m.get("status") not in ("needs_review", "ai_unverified"):
+                continue
+            if (m.get("metadata") or {}).get("ai_audit_reason"):
+                continue
+            if low <= m["confidence_score"] < high:
+                band.append((pid, m))
+    band.sort(key=lambda x: -x[1]["confidence_score"])
+    return band
+
+
+def _group(band: List[tuple]) -> Dict[tuple, List[Dict[str, Any]]]:
+    groups: Dict[tuple, List[Dict[str, Any]]] = {}
+    for pid, m in band:
+        groups.setdefault((pid, m["page_index"], m["legend_id"]), []).append(m)
+    return groups
+
+
+def estimate_ai(tid: str, low: float, high: float, cap: int = 0,
+                project_ids: Optional[List[str]] = None, legend_ids: Optional[List[str]] = None) -> Dict[str, Any]:
+    from app.services import cost_ledger
+
+    t = load_tender(tid)
+    mbp = {ht["project_id"]: load_state(ht["project_id"]).get("markers", []) for ht in t["house_types"]}
+    band = _ai_candidates(mbp, low, high, project_ids, legend_ids)
+    capped = band[:cap] if cap else band
+    groups = _group(capped)
+    calls = sum((len(ms) + 7) // 8 for ms in groups.values())
+    per_call, basis = cost_ledger.cost_per_call()
+    names = {ht["project_id"]: ht["name"] for ht in t["house_types"]}
+    by_house: Dict[str, int] = {}
+    for pid, _ in capped:
+        by_house[names[pid]] = by_house.get(names[pid], 0) + 1
+    return {
+        "marks": len(capped),
+        "available": len(band),
+        "calls": calls,
+        "cost_per_call": per_call,
+        "estimated_cost": round(calls * per_call, 4),
+        "basis": basis,
+        "by_house_type": by_house,
+    }
+
+
+def _ai_pass(tid: str, s: Dict[str, Any], house_types: List[Dict[str, Any]],
+             marks_by_project: Dict[str, List[Dict[str, Any]]], zones: Dict[tuple, Dict[str, float]],
+             symbols: List[Dict[str, Any]], project_ids: Optional[List[str]] = None,
+             legend_ids: Optional[List[str]] = None) -> Dict[str, Any]:
+    """Send borderline marks to the AI checker. Mutates marks_by_project in place (keeps / removes)."""
+    from app.api.takeoff import VerifyCandidatesRequest, verify_candidates_ai, LegendItem
+    from app.services import cost_ledger
+
+    stats = {"checked": 0, "kept": 0, "removed": 0, "calls": 0, "skipped": 0, "error": None, "cost": 0.0}
+    band = _ai_candidates(marks_by_project, s["ai_low"], s["auto_high"], project_ids, legend_ids)
+    cap = int(s.get("max_ai_marks") or 0)
+    if cap and len(band) > cap:
+        stats["skipped"] = len(band) - cap
+        band = band[:cap]
+    groups = _group(band)
+    ht_by_id = {ht["project_id"]: ht for ht in house_types}
+    sym_by_id = {_legend_from_symbol(x)["legend_id"]: x for x in symbols}
+    legends_all = [_legend_from_symbol(x) for x in symbols]
+    _progress(tid, stage="ai", message="AI is checking borderline marks…", done=0, total=len(band))
+    spent_before = cost_ledger.total_for(tid)
+    removed_ids: set = set()
+    checked = 0
+
+    def ai_job(key, ms):
+        cost_ledger.set_tag(tid)
+        pid, page_index, legend_id = key
+        sym = sym_by_id.get(legend_id)
+        if not sym:
+            return key, ms, {"verifications": []}
+        leg = _legend_from_symbol(sym)
+        req = VerifyCandidatesRequest(
+            filepath=ht_by_id[pid]["filepath"],
+            page_index=page_index,
+            legend=LegendItem(**{**leg, "template_crop_coords": None}),
+            markers=ms,
+            api_key=s.get("api_key"),
+            all_legends=[LegendItem(**{**x, "template_crop_coords": None, "template_image_b64": None}) for x in legends_all],
+            excluded_zones=[zones[(pid, page_index)]] if zones.get((pid, page_index)) else [],
+        )
+        return key, ms, verify_candidates_ai(req)
+
+    with ThreadPoolExecutor(max_workers=3) as ex:
+        futs = [ex.submit(ai_job, k, ms) for k, ms in groups.items()]
+        for fut in as_completed(futs):
+            try:
+                key, ms, res = fut.result()
+            except Exception as e:
+                stats["error"] = str(getattr(e, "detail", e))
+                continue
+            stats["calls"] += max(1, (len(ms) + 7) // 8)
+            by_id = {v["marker_id"]: v for v in res.get("verifications", [])}
+            for m in ms:
+                v = by_id.get(m["marker_id"])
+                if not v:
+                    continue  # deduped or excluded by the verifier; leave for the human
+                stats["checked"] += 1
+                if v.get("is_valid"):
+                    stats["kept"] += 1
+                    m["status"] = "ai_verified"
+                    m["metadata"] = {
+                        "first_pass_score": m["confidence_score"],
+                        "ai_audit_reason": v.get("reason"),
+                        "ai_audit_confidence": v.get("confidence"),
+                    }
+                    m["confidence_score"] = round(float(v.get("confidence") or m["confidence_score"]), 3)
+                else:
+                    stats["removed"] += 1
+                    removed_ids.add(m["marker_id"])
+            checked += len(ms)
+            _progress(tid, done=checked, total=len(band),
+                      message=f"AI checked {checked} of {len(band)} borderline marks · ${cost_ledger.total_for(tid) - spent_before:.2f} so far")
+    for pid in marks_by_project:
+        marks_by_project[pid] = [m for m in marks_by_project[pid] if m["marker_id"] not in removed_ids]
+    stats["cost"] = round(cost_ledger.total_for(tid) - spent_before, 4)
+    stats["marks_sent"] = len(band)
+    stats["at"] = time.strftime("%Y-%m-%d %H:%M")
+    with _lock:
+        t = load_tender(tid) or {}
+        t.setdefault("ai_runs", []).append(stats)
+        save_tender(t)
+    return stats
+
+
+def start_ai_run(tid: str, settings: Dict[str, Any], project_ids: Optional[List[str]] = None,
+                 legend_ids: Optional[List[str]] = None) -> Dict[str, Any]:
+    """Run the AI second pass later, on demand, over a finished first pass."""
+    with _lock:
+        th = _running.get(tid)
+        if th and th.is_alive():
+            raise RuntimeError("This tender is already running")
+        s = dict(DEFAULT_SETTINGS)
+        s.update({k: v for k, v in (settings or {}).items() if k in DEFAULT_SETTINGS})
+        t = update_tender(tid, status="running",
+                          progress={"stage": "ai", "message": "Starting AI check…", "done": 0, "total": 0,
+                                    "started_at": time.time(), "ai_only": True})
+        th = threading.Thread(target=_ai_run_thread, args=(tid, s, project_ids, legend_ids), daemon=True)
+        _running[tid] = th
+        th.start()
+        return t
+
+
+def _ai_run_thread(tid: str, s: Dict[str, Any], project_ids, legend_ids) -> None:
+    try:
+        t = load_tender(tid)
+        hts = t["house_types"]
+        mbp = {ht["project_id"]: load_state(ht["project_id"]).get("markers", []) for ht in hts}
+        zones = {}
+        for ht in hts:
+            ez = load_state(ht["project_id"]).get("excluded_zones", {}) or {}
+            for pg, zs in ez.items():
+                if zs:
+                    zones[(ht["project_id"], int(pg))] = zs[0]
+        before = {pid: {m["marker_id"] for m in ms} for pid, ms in mbp.items()}
+        stats = _ai_pass(tid, s, hts, mbp, zones, _library_symbols(), project_ids, legend_ids)
+        # Merge into the latest saved state so review decisions made meanwhile are kept
+        with _lock:
+            for pid, ms in mbp.items():
+                after = {m["marker_id"]: m for m in ms}
+                removed = before[pid] - set(after)
+                st = load_state(pid)
+                new_ms = []
+                for m in st.get("markers", []):
+                    if m["marker_id"] in removed:
+                        continue
+                    upd = after.get(m["marker_id"])
+                    if upd and upd.get("status") == "ai_verified" and m.get("status") in ("needs_review", "ai_unverified"):
+                        m = upd
+                    new_ms.append(m)
+                st["markers"] = new_ms
+                save_state(pid, st)
+        update_tender(tid, status="done", ai=stats)
+        failed = stats.get("error") and not stats.get("checked")
+        _progress(tid, stage="done", ai_only=False,
+                  message=f"AI check failed: {stats['error']}" if failed else f"AI check finished · ${stats.get('cost', 0):.2f}")
+    except Exception as e:
+        traceback.print_exc()
+        update_tender(tid, status="done")
+        _progress(tid, stage="done", message=f"AI check failed: {e}", ai_only=False)
 
 
 # ---------------------------------------------------------------- review
@@ -625,5 +811,6 @@ def set_plots(tid: str, project_id: str, plots: int) -> Dict[str, Any]:
         for ht in t["house_types"]:
             if ht["project_id"] == project_id:
                 ht["plots"] = max(1, int(plots))
+                ht["plots_source"] = {"manual": True}
         save_tender(t)
         return t

@@ -5,6 +5,7 @@ import type { CanvasMode, LegendItem, LibrarySymbol, Marker, Rect, ThemePref, Ve
 import { CATEGORIES, FIX_STAGES, SYMBOL_COLORS, isApproved, isOpen } from "../lib/util";
 import { API_BASE } from "../lib/api";
 import { Modal, SymbolSample } from "./ui";
+import { refreshCosts, usd, useCosts } from "./Costs";
 
 /* ---------------- New / re-cropped symbol ---------------- */
 
@@ -105,6 +106,7 @@ export function AICheckModal({ t, onClose, onNeedKey }: { t: Takeoff; onClose: (
   const [running, setRunning] = useState(false);
   const [error, setError] = useState("");
   const [results, setResults] = useState<Verification[] | null>(null);
+  const costs = useCosts();
 
   const candidatesFor = (id: string) => t.visibleMarkers.filter((m) => m.legend_id === id && !isApproved(m));
   const legendsWithWork = t.legends.filter((l) => candidatesFor(l.legend_id).length > 0);
@@ -126,6 +128,7 @@ export function AICheckModal({ t, onClose, onNeedKey }: { t: Takeoff; onClose: (
       const r = await t.runAICheck(legend, targets);
       if (!r.length) setError("The AI returned no decisions. Try again, or check the backend log.");
       setResults(r);
+      refreshCosts();
     } catch (e) {
       const msg = (e as Error).message;
       setError(msg);
@@ -166,7 +169,9 @@ export function AICheckModal({ t, onClose, onNeedKey }: { t: Takeoff; onClose: (
             <button className="btn btn-ghost" onClick={onClose}>Cancel</button>
             <button className="btn btn-copper" disabled={!legend || targets.length === 0 || running} onClick={run}>
               {running ? <LoaderCircle size={14} className="spin" /> : <Sparkles size={14} />}
-              {running ? "Checking…" : `Check ${targets.length} mark${targets.length === 1 ? "" : "s"}`}
+              {running
+                ? "Checking…"
+                : `Check ${targets.length} mark${targets.length === 1 ? "" : "s"} · ≈ ${usd(Math.ceil(targets.length / 8) * (costs?.cost_per_call ?? 0.0175))}`}
             </button>
           </>
         )

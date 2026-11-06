@@ -7,6 +7,7 @@ import type { Takeoff } from "../state/useTakeoff";
 import type { ThemePref } from "../lib/types";
 import { cx, timeAgo } from "../lib/util";
 import { MenuButton } from "./ui";
+import { CostPill } from "./Costs";
 
 export type Stage = "pack" | "legend" | "count" | "review" | "plots" | "workbook";
 
@@ -152,6 +153,7 @@ export function AppBar(p: Props) {
         </span>
       </span>
 
+      <CostPill />
       <button className="btn btn-ghost btn-sm" onClick={p.onPalette} title="Search actions, sheets and symbols">
         <Command size={13} /> <span className="kbd">K</span>
       </button>

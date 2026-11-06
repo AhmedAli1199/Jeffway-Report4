@@ -12,6 +12,8 @@ import type {
   Tender,
   TenderHouseMarks,
   RunSettings,
+  AIEstimate,
+  CostSummary,
 } from "./types";
 
 export const API_BASE: string =
@@ -190,6 +192,16 @@ export const api = {
     postJson<{ ok: boolean }>(`/tenders/${q(id)}/decision`, body, "Couldn't save decision"),
   approveMany: (id: string, project_ids: string[], marker_ids: string[]) =>
     postJson<{ approved: number }>(`/tenders/${q(id)}/approve-many`, { project_ids, marker_ids }, "Couldn't approve"),
+  aiEstimate: (id: string, body: { ai_low: number; auto_high: number; max_ai_marks?: number; project_ids?: string[] }) =>
+    postJson<AIEstimate>(`/tenders/${q(id)}/ai-estimate`, body, "Couldn't estimate"),
+  aiRun: (id: string, body: { ai_low: number; auto_high: number; max_ai_marks?: number; api_key?: string; project_ids?: string[] }) =>
+    postJson<Tender>(`/tenders/${q(id)}/ai-run`, body, "Couldn't start the AI check"),
+  async uploadSchedule(id: string, file: File): Promise<Tender> {
+    const form = new FormData();
+    form.append("file", file, file.name);
+    return request<Tender>(`/tenders/${q(id)}/schedule`, { method: "POST", body: form }, "Couldn't read that schedule");
+  },
+  costs: () => request<CostSummary>("/tenders/costs/summary", undefined, "Couldn't load AI spend"),
   setPlots: (id: string, project_id: string, plots: number) =>
     postJson<Tender>(`/tenders/${q(id)}/plots`, { project_id, plots }, "Couldn't save plots"),
   cropUrl: (filepath: string, page: number, m: { x: number; y: number; width: number; height: number }, pad = 2.2, size = 360) =>

@@ -129,10 +129,47 @@ export interface HouseType {
   total_pages: number;
   electrical_pages: { page_index: number; page_number: number; title: string }[];
   plots: number;
+  plots_source?: { file?: string; matched?: string[]; manual?: boolean } | null;
+}
+
+export interface AIRun {
+  checked: number;
+  kept: number;
+  removed: number;
+  calls: number;
+  skipped: number;
+  error: string | null;
+  cost?: number;
+  marks_sent?: number;
+  at?: string;
+}
+
+export interface AIEstimate {
+  marks: number;
+  available: number;
+  calls: number;
+  cost_per_call: number;
+  estimated_cost: number;
+  basis: string;
+  by_house_type: Record<string, number>;
+}
+
+export interface CostSummary {
+  total: number;
+  today: number;
+  calls: number;
+  tokens: { input: number; output: number };
+  by_day: { day: string; cost: number }[];
+  by_tender: { tag: string; name: string; cost: number; calls: number }[];
+  recent: { ts: number; model: string; tag: string; input_tokens: number; output_tokens: number; cost: number }[];
+  prices: Record<string, [number, number]>;
+  cost_per_call: number;
+  estimate_basis: string;
 }
 
 export interface RunSettings {
   use_ai: boolean;
+  ai_mode?: "auto" | "manual";
   auto_high: number;
   ai_low: number;
   min_keep: number;
@@ -148,9 +185,12 @@ export interface Tender {
   status: "uploaded" | "running" | "done" | "failed";
   house_types: HouseType[];
   documents: { path: string; kind: string; pages?: number; error?: string }[];
-  progress: { stage: string; message: string; done: number; total: number; started_at?: number };
+  progress: { stage: string; message: string; done: number; total: number; started_at?: number; ai_only?: boolean };
+  schedule?: { file: string; sheet: string; total: number; plots: Record<string, number>; unmatched: Record<string, number> } | null;
+  ai_runs?: AIRun[];
+  legend_entries_removed?: number;
   settings: RunSettings;
-  ai?: { checked: number; kept: number; removed: number; calls: number; skipped: number; error: string | null };
+  ai?: AIRun | null;
   duration_s?: number;
   finished_at?: string;
 }
