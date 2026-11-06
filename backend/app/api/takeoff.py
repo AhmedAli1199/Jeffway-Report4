@@ -77,7 +77,18 @@ def run_auto_count(req: AutoCountRequest) -> Dict[str, Any]:
     else:
         legend_zone = excluded_zones[0] if len(excluded_zones) > 0 else None
 
-    # Execute geometric matcher with rotation and multi-scale
+    # Use the stored sample image when there is one. Re-cropping by coordinates only works on the
+    # sheet the sample was cut from: on any other sheet those coordinates point at unrelated drawing,
+    # which matched everywhere (slow, and full of false marks).
+    sample = None
+    if req.legend.template_image_b64:
+        import base64 as _b64
+        import cv2 as _cv2
+        try:
+            raw = req.legend.template_image_b64.split(",", 1)[-1]
+            sample = _cv2.imdecode(np.frombuffer(_b64.b64decode(raw), np.uint8), _cv2.IMREAD_COLOR)
+        except Exception:
+            sample = None
     found_markers = GeometricVisionMatcher.match_symbol(
         full_image_path=str(img_path),
         template_crop_coords=req.legend.template_crop_coords,
@@ -85,8 +96,9 @@ def run_auto_count(req: AutoCountRequest) -> Dict[str, Any]:
         scales=[0.9, 1.0, 1.1],
         angles=req.angles,
         min_confidence=req.min_confidence,
-        exclude_source_box=True,
-        excluded_zones=excluded_zones
+        exclude_source_box=sample is None,
+        excluded_zones=excluded_zones,
+        template_bgr_override=sample,
     )
 
     # Attach page index
@@ -150,18 +162,21 @@ def verify_candidates_ai(req: VerifyCandidatesRequest):
     temp_dir.mkdir(exist_ok=True)
     tpl_path = temp_dir / f"{req.legend.legend_id}.png"
 
-    if req.legend.template_crop_coords:
+    # The stored sample image comes first. The crop coordinates point at the sheet the sample was cut
+    # from; on any other sheet they land on unrelated drawing, which is what the AI was then shown.
+    if req.legend.template_image_b64:
+        encoded = req.legend.template_image_b64.split(",", 1)[-1]
+        tpl_img = Image.open(io.BytesIO(base64.b64decode(encoded))).convert("RGB")
+        if tpl_img.width < 120 or tpl_img.height < 120:
+            k = max(2, int(np.ceil(120 / max(1, min(tpl_img.width, tpl_img.height)))))
+            tpl_img = tpl_img.resize((tpl_img.width * k, tpl_img.height * k), Image.Resampling.LANCZOS)
+        tpl_img.save(tpl_path)
+    elif req.legend.template_crop_coords:
         tc = req.legend.template_crop_coords
         tpl_crop = full_img.crop((tc["x"], tc["y"], tc["x"] + tc["width"], tc["y"] + tc["height"]))
-        # Also ensure template is rendered at crisp resolution
         if tpl_crop.width < 120 or tpl_crop.height < 120:
             tpl_crop = tpl_crop.resize((max(120, tpl_crop.width * 2), max(120, tpl_crop.height * 2)), Image.Resampling.LANCZOS)
         tpl_crop.save(tpl_path)
-    elif req.legend.template_image_b64:
-        header, encoded = req.legend.template_image_b64.split(",", 1)
-        data = base64.b64decode(encoded)
-        with open(tpl_path, "wb") as f:
-            f.write(data)
     else:
         raise HTTPException(status_code=400, detail="No reference template available for AI verification")
 
@@ -247,7 +262,7 @@ def verify_candidates_ai(req: VerifyCandidatesRequest):
             # Euclidean center distance
             dist = np.sqrt((mcx - acx) ** 2 + (mcy - acy) ** 2)
             max_symbol_dim = max(mw, mh, aw, ah, tpl_max_dim)
-            dist_threshold = 0.75 * max_symbol_dim
+            dist_threshold = 0.5 * max(mw, mh, aw, ah)  # same spot only: neighbouring symbols are kept
 
             # Major-axis spatial deduplication: merge if overlap >= 30% OR center distance < 75% of symbol major dimension
             if overlap_ratio >= 0.30 or dist < dist_threshold:
