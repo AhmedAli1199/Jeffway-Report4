@@ -326,10 +326,24 @@ export function TenderView({
           ) : t.status === "uploaded" || t.status === "failed" ? (
             <RunPanel t={t} onRun={run} hasKey={!!apiKey} />
           ) : counting && !firstSheetDone ? (
-            <Progress t={t} />
+            <Progress t={t} onStop={async () => setT(await api.stopTender(id))} />
           ) : marks ? (
             <>
               {counting && <LiveBanner t={t} onStop={async () => setT(await api.stopTender(id))} onReview={() => onReview()} />}
+              {!counting && t.progress?.stopped && (
+                <div className="live-banner" style={{ boxShadow: "var(--shadow-1), inset 3px 0 0 var(--review)" }}>
+                  <TriangleAlert size={16} style={{ color: "var(--review)", flex: "none" }} />
+                  <div className="grow">
+                    <b>{t.progress.message}</b>
+                    <small className="muted" style={{ display: "block" }}>
+                      Everything counted so far is in the review queue. Continue picks up with the sheets not yet done.
+                    </small>
+                  </div>
+                  <button className="btn btn-copper" onClick={() => run({ ...t.settings, resume: true })}>
+                    <Play size={14} /> Continue counting
+                  </button>
+                </div>
+              )}
               <Overview
                 t={t}
                 marks={marks}
@@ -429,6 +443,11 @@ function RunPanel({ t, onRun, hasKey }: { t: Tender; onRun: (s: Partial<RunSetti
           <b>{sheets}</b> electrical sheets. {docs.length} other document{docs.length === 1 ? "" : "s"} set aside.
           Click a drawing to check exactly which sheets get counted.
         </p>
+        {t.progress?.interrupted && t.status === "uploaded" && (
+          <div className="callout">
+            <TriangleAlert size={14} style={{ color: "var(--review)" }} /> The last run was interrupted before any sheet finished. Run it again.
+          </div>
+        )}
         {t.status === "failed" && (
           <div className="callout" style={{ color: "var(--reject)" }}>
             <TriangleAlert size={14} /> {t.progress?.message}
@@ -626,7 +645,7 @@ function RunPanel({ t, onRun, hasKey }: { t: Tender; onRun: (s: Partial<RunSetti
   );
 }
 
-function Progress({ t }: { t: Tender }) {
+function Progress({ t, onStop }: { t: Tender; onStop: () => void }) {
   const [now, setNow] = useState(Date.now());
   useEffect(() => {
     const h = setInterval(() => setNow(Date.now()), 1000);
@@ -641,6 +660,15 @@ function Progress({ t }: { t: Tender }) {
       <div className="hero-block">
         <span className="eyebrow">Step 2 of 2 · Running · {Math.floor(secs / 60)}:{String(secs % 60).padStart(2, "0")}</span>
         <h1>{p.ai_only ? `AI is checking ${t.name}` : `Counting ${t.name}`}</h1>
+        <p>
+          {p.sheets_total ? `${p.sheets_total} sheets to count. ` : ""}The review queue opens as soon as the first sheet is done, and
+          fills up while the rest are counted.
+        </p>
+        <div className="row">
+          <button className="btn btn-ghost" disabled={!!t.cancel} onClick={onStop} title="Stop after the sheet it's on">
+            {t.cancel ? "Stopping after this sheet…" : "Stop"}
+          </button>
+        </div>
       </div>
       <div className="card">
         <ol className="stages">

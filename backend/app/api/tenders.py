@@ -43,12 +43,13 @@ class RunRequest(BaseModel):
     min_keep: float = 0.55
     max_ai_marks: int = 400
     quick: bool = False
+    resume: bool = False
     api_key: Optional[str] = None
 
 
 @router.post("/{tender_id}/run")
 def run_tender(tender_id: str, req: RunRequest):
-    if not ps.load_tender(tender_id):
+    if not ps.reconcile(ps.load_tender(tender_id)):
         raise HTTPException(404, "Tender not found")
     try:
         t = ps.start_run(tender_id, req.model_dump())
@@ -122,7 +123,7 @@ async def upload_schedule(tender_id: str, file: UploadFile = File(...)):
 
 @router.get("/{tender_id}")
 def get_tender(tender_id: str):
-    t = ps.load_tender(tender_id)
+    t = ps.reconcile(ps.load_tender(tender_id))
     if not t:
         raise HTTPException(404, "Tender not found")
     t.get("settings", {}).pop("api_key", None)

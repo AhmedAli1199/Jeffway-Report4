@@ -45,6 +45,7 @@ DEFAULT_SETTINGS = {
     "min_keep": 0.55,
     "max_ai_marks": 400,
     "quick": False,
+    "resume": False,  # continue a stopped run: skip sheets already counted
     "api_key": None,
 }
 
@@ -85,10 +86,43 @@ def update_tender(tid: str, **patch: Any) -> Dict[str, Any]:
         return t
 
 
+def reconcile(t: Optional[Dict[str, Any]]) -> Optional[Dict[str, Any]]:
+    """A run marked 'running' with no live thread was cut off (e.g. the backend was restarted). Say so."""
+    if not t:
+        return t
+    tid = t["tender_id"]
+    changed = False
+    th = _running.get(tid)
+    if t.get("status") == "running" and not (th and th.is_alive()):
+        states = t.get("sheet_state") or {}
+        n_done = sum(1 for v in states.values() if v == "done")
+        t["status"] = "done" if n_done else "uploaded"
+        prog = dict(t.get("progress") or {})
+        prog.update({
+            "stage": "done", "stopped": True, "interrupted": True, "sheets_done": n_done,
+            "sheets_total": prog.get("sheets_total") or len(states),
+            "message": f"Interrupted after {n_done} of {prog.get('sheets_total') or len(states)} sheets (the backend stopped). Continue to count the rest.",
+        })
+        t["progress"] = prog
+        t["cancel"] = False
+        for k, v in states.items():
+            if v == "running":
+                states[k] = "pending"
+        changed = True
+    ai = t.get("ai_progress") or {}
+    ath = _running.get(f"{tid}#ai")
+    if ai.get("running") and not (ath and ath.is_alive()):
+        t["ai_progress"] = {**ai, "running": False, "failed": True, "message": "AI check was interrupted (the backend stopped). Run it again: marks already checked won't be re-sent."}
+        changed = True
+    if changed:
+        save_tender(t)
+    return t
+
+
 def list_tenders() -> List[Dict[str, Any]]:
     out = []
     for d in sorted(TENDERS_DIR.iterdir(), key=lambda p: p.stat().st_mtime, reverse=True):
-        t = load_tender(d.name) if d.is_dir() else None
+        t = reconcile(load_tender(d.name)) if d.is_dir() else None
         if t:
             t.get("settings", {}).pop("api_key", None)
             out.append(t)
@@ -451,13 +485,16 @@ def _run_inner(tid: str, s: Dict[str, Any]) -> None:
             st.setdefault("excluded_zones", {})
             save_state(pid, st)
 
-    sheets = [(ht, pg) for ht in house_types for pg in ht["electrical_pages"]]
-    n_sheets = len(sheets)
-    total = n_sheets * len(match_syms)
-    sheet_state = {f"{ht['project_id']}:{pg['page_index']}": "pending" for ht, pg in sheets}
+    all_sheets = [(ht, pg) for ht in house_types for pg in ht["electrical_pages"]]
+    prev = (load_tender(tid) or {}).get("sheet_state") or {}
+    already = {k for k, v in prev.items() if v == "done"} if s.get("resume") else set()
+    sheets = [(ht, pg) for ht, pg in all_sheets if f"{ht['project_id']}:{pg['page_index']}" not in already]
+    n_sheets = len(all_sheets)
+    total = len(sheets) * len(match_syms)
+    sheet_state = {f"{ht['project_id']}:{pg['page_index']}": ("done" if f"{ht['project_id']}:{pg['page_index']}" in already else "pending") for ht, pg in all_sheets}
     update_tender(tid, sheet_state=sheet_state)
     _progress(tid, stage="matching", message="Finding symbols…", done=0, total=total,
-              sheets_done=0, sheets_total=n_sheets, marks_found=0)
+              sheets_done=len(already), sheets_total=n_sheets, marks_found=0, stopped=False, interrupted=False)
 
     done = 0
     found_total = 0
@@ -533,7 +570,7 @@ def _run_inner(tid: str, s: Dict[str, Any]) -> None:
             added = _merge_sheet(pid, page_index, clean, zone)
             found_total += added
             _set_sheet_state(tid, skey, "done")
-            _progress(tid, done=done, total=total, sheets_done=si + 1, marks_found=found_total,
+            _progress(tid, done=done, total=total, sheets_done=len(already) + si + 1, marks_found=found_total,
                       message=f"{label}: {added} marks ready for review", last_sheet=label)
 
     # ---- AI second pass on the borderline band (auto mode), over everything saved so far
@@ -837,7 +874,7 @@ def _ai_run_thread(tid: str, s: Dict[str, Any], project_ids, legend_ids) -> None
 # ---------------------------------------------------------------- review
 
 def tender_marks(tid: str) -> Dict[str, Any]:
-    t = load_tender(tid)
+    t = reconcile(load_tender(tid))
     if not t:
         raise KeyError(tid)
     out = []

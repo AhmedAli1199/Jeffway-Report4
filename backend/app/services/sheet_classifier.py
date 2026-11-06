@@ -22,7 +22,12 @@ from typing import Any, Dict, List
 import fitz
 
 POSITIVE = re.compile(r"\b(electrical|electric|elec|lighting|small power|power|m\s*&\s*e|mechanical\s*(?:&|and)\s*electrical|services|containment|fire alarm)\b", re.I)
-NEGATIVE = re.compile(r"\b(elevations?|sections?|foundations?|joists?|setting out|drainage|site plan|sales|landscap\w*|external works|structural|roof truss|window|door schedule|details?)\b", re.I)
+NEGATIVE = re.compile(
+    r"\b(elevations?|sections?|foundations?|joists?|setting out|drainage|site plan|sales|landscap\w*|external works|"
+    r"structural|roof truss|window|door schedule|details?|fire strategy|fire safety|means of escape|escape|"
+    r"compartment\w*|sprinkler\w*|wayfinding|levels|planning|parking|refuse|cycle store|demolition|existing)\b",
+    re.I,
+)
 LEGEND_SHEET = re.compile(r"\b(legend|key|symbols?)\b", re.I)
 TITLE_LINE = re.compile(r"\b(plan|layout|elevations?|sections?|details?|schedule|arrangement|legend|key)\b", re.I)
 _STOP = {"a", "an", "and", "the", "of", "to", "for", "in", "at", "on", "with", "or", "level"}
