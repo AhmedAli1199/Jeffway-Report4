@@ -245,7 +245,7 @@ export function TenderView({
     try {
       const x = await api.tender(id);
       setT(x);
-      if (x.status === "done") setMarks((await api.tenderMarks(id)).house_types);
+      if (x.status === "done" || x.status === "running") setMarks((await api.tenderMarks(id)).house_types);
     } catch (e) {
       toast({ tone: "error", title: "Couldn't load tender", body: (e as Error).message });
     }
@@ -255,34 +255,61 @@ export function TenderView({
     load();
   }, [load]);
 
-  // Poll while running
+  // Live updates while counting or an AI check runs: the tender every 1.5 s, its marks whenever a sheet lands
+  const counting = t?.status === "running";
+  const aiRunning = !!t?.ai_progress?.running;
+  const lastSheets = useRef<number>(-1);
+  const wasAI = useRef(false);
   useEffect(() => {
-    if (t?.status !== "running") return;
+    if (!counting && !aiRunning) return;
     const h = setInterval(async () => {
       const x = await api.tender(id).catch(() => null);
       if (!x) return;
       setT(x);
-      if (x.status === "done") {
-        setMarks((await api.tenderMarks(id)).house_types);
+      const sheetsDone = x.progress?.sheets_done ?? 0;
+      const finished = x.status === "done";
+      if (sheetsDone !== lastSheets.current || finished || x.ai_progress?.running) {
+        lastSheets.current = sheetsDone;
+        const m = await api.tenderMarks(id).catch(() => null);
+        if (m) setMarks(m.house_types);
+      }
+      if (finished && counting) {
         refreshCosts();
-        const failed = /failed/i.test(x.progress?.message ?? "");
         toast(
-          x.ai?.at && (x.ai_runs?.length ?? 0) > 0 && x.progress?.message?.startsWith("AI")
-            ? { tone: failed ? "error" : "success", title: failed ? "AI check failed" : `AI kept ${x.ai?.kept}, removed ${x.ai?.removed}`, body: x.progress.message }
-            : { tone: "success", title: "Takeoff ready", body: "Everything is counted. Start the review queue." },
+          x.progress?.stopped
+            ? { tone: "info", title: "Counting stopped", body: x.progress.message }
+            : { tone: "success", title: "Takeoff complete", body: "Every sheet is counted." },
         );
       }
-    }, 1000);
+    }, 1500);
     return () => clearInterval(h);
-  }, [t?.status, id, toast]);
+  }, [counting, aiRunning, id, toast]);
+
+  // Tell the user when a background AI check finishes
+  useEffect(() => {
+    if (wasAI.current && !aiRunning && t?.ai_progress) {
+      refreshCosts();
+      api.tenderMarks(id).then((m) => setMarks(m.house_types)).catch(() => {});
+      toast({
+        tone: t.ai_progress.failed ? "error" : "success",
+        title: t.ai_progress.failed ? "AI check failed" : "AI check finished",
+        body: t.ai_progress.message,
+      });
+    }
+    wasAI.current = aiRunning;
+  }, [aiRunning]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const run = async (s: Partial<RunSettings>) => {
     try {
+      lastSheets.current = -1;
       setT(await api.runTender(id, { ...s, api_key: apiKey || undefined }));
+      setMarks((await api.tenderMarks(id)).house_types);
     } catch (e) {
       toast({ tone: "error", title: "Couldn't start", body: (e as Error).message });
     }
   };
+
+  const firstSheetDone = (t?.progress?.sheets_done ?? 0) > 0;
 
   return (
     <div className="shell">
@@ -298,30 +325,70 @@ export function TenderView({
             <div className="skeleton" style={{ height: 160 }} />
           ) : t.status === "uploaded" || t.status === "failed" ? (
             <RunPanel t={t} onRun={run} hasKey={!!apiKey} />
-          ) : t.status === "running" ? (
+          ) : counting && !firstSheetDone ? (
             <Progress t={t} />
           ) : marks ? (
-            <Overview
-              t={t}
-              marks={marks}
-              threshold={threshold}
-              setThreshold={setThreshold}
-              onReview={onReview}
-              onOpenDrawing={onOpenDrawing}
-              onRerun={() => setT({ ...t, status: "uploaded" })}
-              apiKey={apiKey}
-              onAIStarted={(nt) => setT(nt)}
-              onPlots={async (pid, n) => {
-                setMarks((ms) => ms?.map((h) => (h.project_id === pid ? { ...h, plots: n } : h)) ?? null);
-                const nt = await api.setPlots(id, pid, n).catch(() => null);
-                if (nt) setT(nt);
-              }}
-            />
+            <>
+              {counting && <LiveBanner t={t} onStop={async () => setT(await api.stopTender(id))} onReview={() => onReview()} />}
+              <Overview
+                t={t}
+                marks={marks}
+                threshold={threshold}
+                setThreshold={setThreshold}
+                onReview={onReview}
+                onOpenDrawing={onOpenDrawing}
+                onRerun={() => setT({ ...t, status: "uploaded" })}
+                apiKey={apiKey}
+                onAIStarted={(nt) => setT(nt)}
+                onPlots={async (pid, n) => {
+                  setMarks((ms) => ms?.map((h) => (h.project_id === pid ? { ...h, plots: n } : h)) ?? null);
+                  const nt = await api.setPlots(id, pid, n).catch(() => null);
+                  if (nt) setT(nt);
+                }}
+              />
+            </>
           ) : (
             <div className="skeleton" style={{ height: 160 }} />
           )}
         </div>
       </main>
+    </div>
+  );
+}
+
+/** Shown on the overview while counting carries on in the background. */
+function LiveBanner({ t, onStop, onReview }: { t: Tender; onStop: () => void; onReview: () => void }) {
+  const [now, setNow] = useState(Date.now());
+  useEffect(() => {
+    const h = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(h);
+  }, []);
+  const p = t.progress;
+  const pct = p.total ? p.done / p.total : 0;
+  const elapsed = p.started_at ? now / 1000 - p.started_at : 0;
+  const remaining = pct > 0.02 ? (elapsed / pct) * (1 - pct) : null;
+  const fmt = (sec: number) => (sec >= 3600 ? `${Math.floor(sec / 3600)}h ${Math.round((sec % 3600) / 60)}m` : `${Math.max(1, Math.round(sec / 60))} min`);
+  return (
+    <div className="live-banner">
+      <span className="live-dot" aria-hidden="true" />
+      <div className="grow" style={{ minWidth: 0 }}>
+        <div className="row" style={{ justifyContent: "space-between", flexWrap: "wrap", gap: 6 }}>
+          <b>
+            Still counting · {p.sheets_done ?? 0} of {p.sheets_total ?? "?"} sheets done · {p.marks_found ?? 0} marks so far
+          </b>
+          <span className="muted">
+            {t.cancel ? "Stopping after this sheet…" : remaining != null ? `About ${fmt(remaining)} left` : "Working out time left…"}
+          </span>
+        </div>
+        <div className="progress-line"><i style={{ width: `${pct * 100}%` }} /></div>
+        <small className="muted truncate" style={{ display: "block" }}>
+          Now: {p.current ?? p.message}. Finished sheets are already in the review queue, and the AI check can run on them now.
+        </small>
+      </div>
+      <button className="btn btn-copper" onClick={onReview}>Review what's found <ArrowRight size={14} /></button>
+      <button className="btn btn-ghost" disabled={!!t.cancel} onClick={onStop} title="Stop after the sheet it's on. Everything counted so far stays.">
+        {t.cancel ? "Stopping…" : "Stop"}
+      </button>
     </div>
   );
 }
@@ -665,15 +732,17 @@ function Overview({
       <div className="overview-head">
         <div className="hero-block">
           <span className="eyebrow">
-            Takeoff · {t.finished_at} · {t.duration_s ? `${Math.floor(t.duration_s / 60)}m ${t.duration_s % 60}s` : ""}
+            {t.status === "running"
+              ? "Takeoff · counting in the background"
+              : `Takeoff · ${t.finished_at ?? ""}${t.duration_s ? ` · ${Math.floor(t.duration_s / 60)}m ${t.duration_s % 60}s` : ""}${t.progress?.stopped ? " · stopped early" : ""}`}
           </span>
           <h1>{t.name}</h1>
         </div>
         <div className="row">
-          <button className="btn btn-ghost" onClick={onRerun}>
+          <button className="btn btn-ghost" onClick={onRerun} disabled={t.status === "running"}>
             <Zap size={14} /> Run again
           </button>
-          <button className="btn btn-copper btn-lg" onClick={() => onReview()} disabled={!data.toReview}>
+          <button className="btn btn-copper btn-lg" onClick={() => onReview()} disabled={!data.toReview && t.status !== "running"}>
             Start review queue <span className="kbd">{data.toReview}</span> <ArrowRight size={15} />
           </button>
         </div>
@@ -760,7 +829,15 @@ function Overview({
                             <span className="title">{p.title || `Page ${p.page_number}`}</span>
                             <span className="sub mono">p.{p.page_number}</span>
                           </span>
-                          <span className="badge-count">{ph.pages.get(p.page_index) ?? 0}</span>
+                          {t.status === "running" && t.sheet_state?.[`${h.project_id}:${p.page_index}`] !== "done" ? (
+                            t.sheet_state?.[`${h.project_id}:${p.page_index}`] === "running" ? (
+                              <span className="pill pill-ai"><LoaderCircle size={11} className="spin" /> Counting</span>
+                            ) : (
+                              <span className="pill pill-plain">Waiting</span>
+                            )
+                          ) : (
+                            <span className="badge-count">{ph.pages.get(p.page_index) ?? 0}</span>
+                          )}
                         </button>
                       ))}
                     </div>
@@ -866,7 +943,7 @@ function AIPanel({
       alive = false;
       clearTimeout(h);
     };
-  }, [t.tender_id, low, high, cap, house, t.ai_runs?.length]);
+  }, [t.tender_id, low, high, cap, house, t.ai_runs?.length, t.progress?.sheets_done, t.ai_progress?.running]);
 
   const spent = (t.ai_runs ?? []).reduce((n, r) => n + (r.cost ?? 0), 0);
 
@@ -921,6 +998,23 @@ function AIPanel({
           <input id="ai-cap" type="range" className="slider" min={0} max={Math.max(50, est?.available ?? 50)} step={10} value={cap} onChange={(e) => setCap(Number(e.target.value))} />
         </div>
       </div>
+      {t.ai_progress?.running && (
+        <div className="callout">
+          <LoaderCircle size={14} className="spin" style={{ color: "var(--ai)" }} />
+          <span className="grow">
+            {t.ai_progress.message}
+            <span className="progress-line" style={{ display: "block" }}>
+              <i style={{ width: `${t.ai_progress.total ? (t.ai_progress.done / t.ai_progress.total) * 100 : 3}%`, background: "var(--ai)" }} />
+            </span>
+          </span>
+        </div>
+      )}
+      {t.status === "running" && !t.ai_progress?.running && (
+        <span className="muted" style={{ fontSize: 12 }}>
+          Counting is still running. The AI check covers marks found so far; run it again later for the rest. Marks it has
+          already seen are never re-sent.
+        </span>
+      )}
       <div className="estimate">
         <div><b className="mono">{est?.marks ?? "–"}</b><span>marks to check{est && est.available > est.marks ? ` of ${est.available}` : ""}</span></div>
         <div><b className="mono">{est?.calls ?? "–"}</b><span>AI calls</span></div>
@@ -933,8 +1027,8 @@ function AIPanel({
               <button className="btn btn-ghost" onClick={() => setConfirm(false)}>Cancel</button>
             </span>
           ) : (
-            <button className="btn btn-primary btn-lg" disabled={!est?.marks} onClick={() => setConfirm(true)}>
-              <Sparkles size={15} /> Run AI check
+            <button className="btn btn-primary btn-lg" disabled={!est?.marks || !!t.ai_progress?.running} onClick={() => setConfirm(true)}>
+              <Sparkles size={15} /> {t.ai_progress?.running ? "AI check running…" : "Run AI check"}
             </button>
           )}
         </div>

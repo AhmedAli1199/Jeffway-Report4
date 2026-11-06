@@ -374,6 +374,7 @@ def start_run(tid: str, settings: Dict[str, Any]) -> Dict[str, Any]:
         t = update_tender(
             tid,
             status="running",
+            cancel=False,
             settings={**s, "api_key": None},
             progress={"stage": "starting", "message": "Starting…", "done": 0, "total": 0, "started_at": time.time()},
         )
@@ -428,148 +429,193 @@ def _run_inner(tid: str, s: Dict[str, Any]) -> None:
     match_syms = [sym for sym in match_syms if templates[id(sym)] is not None]
 
     scales = [1.0] if s.get("quick") else [0.9, 1.0, 1.1]
-
-    # ---- Render sheets and find legend tables
-    _progress(tid, stage="sheets", message="Rendering electrical sheets…")
-    sheets = []  # (ht, page)
-    images: Dict[tuple, np.ndarray] = {}
-    zones: Dict[tuple, Optional[Dict[str, float]]] = {}
-    for ht in house_types:
-        pdf = Path(ht["filepath"])
-        for pg in ht["electrical_pages"]:
-            img_path, _, _ = PDFService.render_page_image(pdf, pg["page_index"], 200)
-            key = (ht["project_id"], pg["page_index"])
-            images[key] = cv2.imread(str(img_path))
-            try:
-                z = PDFService.detect_legend_zone(pdf, pg["page_index"], 200)
-            except Exception:
-                z = None
-            # Trust a detected legend area only if a "Legend" heading sits inside it;
-            # otherwise legend rows are caught individually by _is_legend_entry.
-            if z:
-                try:
-                    heads = [L for L in _sheet_text_lines(pdf, pg["page_index"]) if "legend" in " ".join(L["words"]).lower()]
-                except Exception:
-                    heads = []
-                inside = any(
-                    z["x"] <= (L["x0"] + L["x1"]) / 2 <= z["x"] + z["width"] and z["y"] <= (L["y0"] + L["y1"]) / 2 <= z["y"] + z["height"]
-                    for L in heads
-                )
-                ih, iw = images[key].shape[:2]
-                too_big = z["width"] > 0.5 * iw or z["height"] > 0.95 * ih
-                if not inside or too_big:
-                    z = None
-            zones[key] = z
-            sheets.append((ht, pg))
-
-    total = len(sheets) * len(match_syms)
-    _progress(tid, stage="matching", message="Finding symbols…", done=0, total=total)
-
-    def job(ht: Dict[str, Any], pg: Dict[str, Any], sym: Dict[str, Any]):
-        key = (ht["project_id"], pg["page_index"])
-        z = zones.get(key)
-        found = GeometricVisionMatcher.match_symbol(
-            full_image_path="",
-            template_crop_coords={"x": 0, "y": 0, "width": 10, "height": 10},
-            legend_id=_legend_from_symbol(sym)["legend_id"],
-            scales=scales,
-            angles=[0, 90, 180, 270],
-            min_confidence=float(s["min_keep"]),
-            excluded_zones=[z] if z else None,
-            template_bgr_override=templates[id(sym)],
-            image_bgr_override=images[key],
-        )
-        return ht, pg, sym, found
-
-    per_sheet: Dict[tuple, List[Dict[str, Any]]] = {}
-    done = 0
-    last_report = 0.0
-    with ThreadPoolExecutor(max_workers=4) as ex:
-        futures = [ex.submit(job, ht, pg, sym) for ht, pg in sheets for sym in match_syms]
-        for fut in as_completed(futures):
-            try:
-                ht, pg, sym, found = fut.result()
-            except Exception as e:
-                print(f"[pipeline] match failed: {e}")
-                done += 1
-                continue
-            key = (ht["project_id"], pg["page_index"])
-            for m in found:
-                m.update({
-                    "marker_id": f"mk_{uuid.uuid4().hex[:8]}",
-                    "page_index": pg["page_index"],
-                    "page_number": pg["page_number"],
-                    "room": "Unassigned",
-                    "confidence_score": round(float(m["confidence_score"]), 3),
-                })
-            per_sheet.setdefault(key, []).extend(found)
-            done += 1
-            if time.time() - last_report > 0.6 or done == total:
-                last_report = time.time()
-                _progress(
-                    tid, done=done, total=total,
-                    message=f"{ht['name']} · {pg.get('title') or 'p.' + str(pg['page_number'])} · {_legend_from_symbol(sym)['label']}",
-                )
-
-    # ---- Clean up and band
-    _progress(tid, stage="saving", message="Removing legend entries and duplicates…")
+    legends_all = [_legend_from_symbol(x) for x in symbols]
     label_tokens = [_tokens(_legend_from_symbol(x)["label"] + " " + (x.get("sheet_desc") or "")) for x in symbols]
     label_tokens += [_tokens(x.get("cad_label") or "") for x in symbols]
-    ht_by_pid = {ht["project_id"]: ht for ht in house_types}
-    legend_dropped = 0
-    marks_by_project: Dict[str, List[Dict[str, Any]]] = {ht["project_id"]: [] for ht in house_types}
-    for (pid, page_index), marks in per_sheet.items():
-        try:
-            lines = _sheet_text_lines(Path(ht_by_pid[pid]["filepath"]), page_index)
-        except Exception:
-            lines = []
-        before = len(marks)
-        marks = [m for m in marks if not _is_legend_entry(m, lines, label_tokens)]
-        legend_dropped += before - len(marks)
-        for m in _cross_symbol_dedupe(marks, order):
-            m["status"] = "ai_unverified" if m["confidence_score"] >= s["auto_high"] else "needs_review"
-            marks_by_project[pid].append(m)
 
-    # ---- AI second pass on the borderline band only (auto mode)
-    ai_stats = None
-    if s.get("use_ai") and s.get("ai_mode", "auto") == "auto":
-        zones_first = {k: v for k, v in zones.items() if v}
-        ai_stats = _ai_pass(tid, s, house_types, marks_by_project, zones_first, symbols)
-
-    # ---- Write one project per house type
-    _progress(tid, stage="saving", message="Saving results…")
-    legends_all = [_legend_from_symbol(x) for x in symbols]
+    # Projects exist from the start, so the overview, review queue and AI check work while counting runs
     for ht in house_types:
         pid = ht["project_id"]
         pdir = PROJECTS_DIR / pid
         pdir.mkdir(parents=True, exist_ok=True)
         with open(pdir / "project.json", "w") as f:
             json.dump({
-                "project_id": pid,
-                "name": ht["name"],
-                "filename": ht["filename"],
-                "filepath": ht["filepath"],
-                "is_sample": False,
-                "tender_id": tid,
-                "description": f"House type from {t['name']}",
+                "project_id": pid, "name": ht["name"], "filename": ht["filename"], "filepath": ht["filepath"],
+                "is_sample": False, "tender_id": tid, "description": f"House type from {t['name']}",
             }, f, indent=2)
-        excluded = {
-            str(pg["page_index"]): [{**zones[(pid, pg["page_index"])], "label": "Legend"}]
-            for pg in ht["electrical_pages"]
-            if zones.get((pid, pg["page_index"]))
-        }
-        save_state(pid, {
-            "legends": legends_all,
-            "markers": marks_by_project[pid],
-            "rooms": [],
-            "excluded_zones": excluded,
-        })
+        with _lock:
+            st = load_state(pid)
+            if not st.get("legends"):
+                st["legends"] = legends_all
+            st.setdefault("rooms", [])
+            st.setdefault("excluded_zones", {})
+            save_state(pid, st)
+
+    sheets = [(ht, pg) for ht in house_types for pg in ht["electrical_pages"]]
+    n_sheets = len(sheets)
+    total = n_sheets * len(match_syms)
+    sheet_state = {f"{ht['project_id']}:{pg['page_index']}": "pending" for ht, pg in sheets}
+    update_tender(tid, sheet_state=sheet_state)
+    _progress(tid, stage="matching", message="Finding symbols…", done=0, total=total,
+              sheets_done=0, sheets_total=n_sheets, marks_found=0)
+
+    done = 0
+    found_total = 0
+    legend_dropped = 0
+    stopped = False
+    last_report = 0.0
+
+    with ThreadPoolExecutor(max_workers=4) as ex:
+        for si, (ht, pg) in enumerate(sheets):
+            if (load_tender(tid) or {}).get("cancel"):
+                stopped = True
+                break
+            pid, page_index = ht["project_id"], pg["page_index"]
+            skey = f"{pid}:{page_index}"
+            label = f"{ht['name']} · {pg.get('title') or 'p.' + str(pg['page_number'])}"
+            _set_sheet_state(tid, skey, "running")
+            _progress(tid, current=label, message=f"{label}: rendering")
+
+            # ---- One sheet at a time: render, find the legend area, match every symbol in parallel
+            pdf = Path(ht["filepath"])
+            img_path, _, _ = PDFService.render_page_image(pdf, page_index, 200)
+            image = cv2.imread(str(img_path))
+            zone = _trusted_legend_zone(pdf, page_index, image)
+
+            def job(sym, image=image, zone=zone):
+                return sym, GeometricVisionMatcher.match_symbol(
+                    full_image_path="",
+                    template_crop_coords={"x": 0, "y": 0, "width": 10, "height": 10},
+                    legend_id=_legend_from_symbol(sym)["legend_id"],
+                    scales=scales,
+                    angles=[0, 90, 180, 270],
+                    min_confidence=float(s["min_keep"]),
+                    excluded_zones=[zone] if zone else None,
+                    template_bgr_override=templates[id(sym)],
+                    image_bgr_override=image,
+                )
+
+            marks: List[Dict[str, Any]] = []
+            futures = [ex.submit(job, sym) for sym in match_syms]
+            for fut in as_completed(futures):
+                try:
+                    sym, found = fut.result()
+                except Exception as e:
+                    print(f"[pipeline] match failed: {e}")
+                    done += 1
+                    continue
+                for m in found:
+                    m.update({
+                        "marker_id": f"mk_{uuid.uuid4().hex[:8]}",
+                        "page_index": page_index,
+                        "page_number": pg["page_number"],
+                        "room": "Unassigned",
+                        "confidence_score": round(float(m["confidence_score"]), 3),
+                    })
+                marks.extend(found)
+                done += 1
+                if time.time() - last_report > 0.8:
+                    last_report = time.time()
+                    _progress(tid, done=done, total=total, message=f"{label} · {_legend_from_symbol(sym)['label']}")
+            del image
+
+            # ---- Clean this sheet and publish it to the review queue straight away
+            try:
+                lines = _sheet_text_lines(pdf, page_index)
+            except Exception:
+                lines = []
+            before = len(marks)
+            marks = [m for m in marks if not _is_legend_entry(m, lines, label_tokens)]
+            legend_dropped += before - len(marks)
+            clean = _cross_symbol_dedupe(marks, order)
+            for m in clean:
+                m["status"] = "ai_unverified" if m["confidence_score"] >= s["auto_high"] else "needs_review"
+            added = _merge_sheet(pid, page_index, clean, zone)
+            found_total += added
+            _set_sheet_state(tid, skey, "done")
+            _progress(tid, done=done, total=total, sheets_done=si + 1, marks_found=found_total,
+                      message=f"{label}: {added} marks ready for review", last_sheet=label)
+
+    # ---- AI second pass on the borderline band (auto mode), over everything saved so far
+    ai_stats = None
+    if s.get("use_ai") and s.get("ai_mode", "auto") == "auto" and not stopped:
+        ai_stats = _ai_run_core(tid, s, None, None, report=None)
 
     started = (load_tender(tid) or {}).get("progress", {}).get("started_at", time.time())
-    update_tender(tid, status="done", ai=ai_stats, legend_entries_removed=legend_dropped,
-                  schedule=(load_tender(tid) or {}).get("schedule"), settings={**s, "api_key": None},
-                  finished_at=time.strftime("%Y-%m-%d %H:%M"), duration_s=round(time.time() - started))
-    _progress(tid, stage="done", message="Takeoff ready for review", done=total, total=total)
+    done_sheets = sum(1 for v in ((load_tender(tid) or {}).get("sheet_state") or {}).values() if v == "done")
+    patch = dict(status="done", legend_entries_removed=legend_dropped, cancel=False,
+                 schedule=(load_tender(tid) or {}).get("schedule"), settings={**s, "api_key": None},
+                 finished_at=time.strftime("%Y-%m-%d %H:%M"), duration_s=round(time.time() - started))
+    if ai_stats is not None:
+        patch["ai"] = ai_stats
+    update_tender(tid, **patch)
+    _progress(tid, stage="done", stopped=stopped,
+              message=f"Stopped after {done_sheets} of {n_sheets} sheets" if stopped else "Takeoff ready for review",
+              done=done, total=total, sheets_done=done_sheets)
+
+
+KEEP_ON_RERUN = ("user_verified", "manual_added", "ai_verified")
+
+
+def _merge_sheet(pid: str, page_index: int, clean: List[Dict[str, Any]], zone: Optional[Dict[str, float]]) -> int:
+    """Put one sheet's fresh marks into the saved state without touching decisions people already made."""
+    with _lock:
+        st = load_state(pid)
+        keep = [m for m in st.get("markers", []) if m.get("page_index") != page_index or m.get("status") in KEEP_ON_RERUN]
+        confirmed = [m for m in keep if m.get("page_index") == page_index]
+
+        def near(n):
+            ncx, ncy = n["x"] + n["width"] / 2, n["y"] + n["height"] / 2
+            r = max(30, max(n["width"], n["height"]) * 1.45)
+            return any(
+                e["legend_id"] == n["legend_id"]
+                and ((e["x"] + e["width"] / 2 - ncx) ** 2 + (e["y"] + e["height"] / 2 - ncy) ** 2) ** 0.5 < r
+                for e in confirmed
+            )
+
+        fresh = [m for m in clean if not near(m)]
+        st["markers"] = keep + fresh
+        ez = st.setdefault("excluded_zones", {})
+        if zone:
+            ez[str(page_index)] = [{**zone, "label": "Legend"}]
+        save_state(pid, st)
+        return len(fresh)
+
+
+def _set_sheet_state(tid: str, key: str, state: str) -> None:
+    with _lock:
+        t = load_tender(tid)
+        if not t:
+            return
+        t.setdefault("sheet_state", {})[key] = state
+        save_tender(t)
+
+
+def _trusted_legend_zone(pdf: Path, page_index: int, image: np.ndarray) -> Optional[Dict[str, float]]:
+    """The detected legend area, kept only if a "Legend" heading sits inside it and it isn't most of the sheet."""
+    try:
+        z = PDFService.detect_legend_zone(pdf, page_index, 200)
+    except Exception:
+        z = None
+    if not z:
+        return None
+    try:
+        heads = [L for L in _sheet_text_lines(pdf, page_index) if "legend" in " ".join(L["words"]).lower()]
+    except Exception:
+        heads = []
+    inside = any(
+        z["x"] <= (L["x0"] + L["x1"]) / 2 <= z["x"] + z["width"] and z["y"] <= (L["y0"] + L["y1"]) / 2 <= z["y"] + z["height"]
+        for L in heads
+    )
+    ih, iw = image.shape[:2]
+    if not inside or z["width"] > 0.5 * iw or z["height"] > 0.95 * ih:
+        return None
+    return z
+
+
+def stop_run(tid: str) -> Dict[str, Any]:
+    """Ask a running takeoff to stop after the sheet it is on. Everything counted so far stays."""
+    return update_tender(tid, cancel=True)
 
 
 # ---------------------------------------------------------------- AI second pass
@@ -630,8 +676,11 @@ def estimate_ai(tid: str, low: float, high: float, cap: int = 0,
 def _ai_pass(tid: str, s: Dict[str, Any], house_types: List[Dict[str, Any]],
              marks_by_project: Dict[str, List[Dict[str, Any]]], zones: Dict[tuple, Dict[str, float]],
              symbols: List[Dict[str, Any]], project_ids: Optional[List[str]] = None,
-             legend_ids: Optional[List[str]] = None) -> Dict[str, Any]:
+             legend_ids: Optional[List[str]] = None, report=None) -> Dict[str, Any]:
     """Send borderline marks to the AI checker. Mutates marks_by_project in place (keeps / removes)."""
+    if report is None:
+        def report(done, total, message):
+            _progress(tid, stage="ai", done=done, total=total, message=message)
     from app.api.takeoff import VerifyCandidatesRequest, verify_candidates_ai, LegendItem
     from app.services import cost_ledger
 
@@ -645,7 +694,7 @@ def _ai_pass(tid: str, s: Dict[str, Any], house_types: List[Dict[str, Any]],
     ht_by_id = {ht["project_id"]: ht for ht in house_types}
     sym_by_id = {_legend_from_symbol(x)["legend_id"]: x for x in symbols}
     legends_all = [_legend_from_symbol(x) for x in symbols]
-    _progress(tid, stage="ai", message="AI is checking borderline marks…", done=0, total=len(band))
+    report(0, len(band), "AI is checking borderline marks…")
     spent_before = cost_ledger.total_for(tid)
     removed_ids: set = set()
     checked = 0
@@ -696,8 +745,7 @@ def _ai_pass(tid: str, s: Dict[str, Any], house_types: List[Dict[str, Any]],
                     stats["removed"] += 1
                     removed_ids.add(m["marker_id"])
             checked += len(ms)
-            _progress(tid, done=checked, total=len(band),
-                      message=f"AI checked {checked} of {len(band)} borderline marks · ${cost_ledger.total_for(tid) - spent_before:.2f} so far")
+            report(checked, len(band), f"AI checked {checked} of {len(band)} borderline marks · ${cost_ledger.total_for(tid) - spent_before:.2f} so far")
     for pid in marks_by_project:
         marks_by_project[pid] = [m for m in marks_by_project[pid] if m["marker_id"] not in removed_ids]
     stats["cost"] = round(cost_ledger.total_for(tid) - spent_before, 4)
@@ -712,59 +760,78 @@ def _ai_pass(tid: str, s: Dict[str, Any], house_types: List[Dict[str, Any]],
 
 def start_ai_run(tid: str, settings: Dict[str, Any], project_ids: Optional[List[str]] = None,
                  legend_ids: Optional[List[str]] = None) -> Dict[str, Any]:
-    """Run the AI second pass later, on demand, over a finished first pass."""
+    """Run the AI second pass on demand. It can run while counting is still going: it checks what has
+    been found so far and merges its verdicts into the saved state."""
     with _lock:
-        th = _running.get(tid)
+        key = f"{tid}#ai"
+        th = _running.get(key)
         if th and th.is_alive():
-            raise RuntimeError("This tender is already running")
+            raise RuntimeError("An AI check is already running for this tender")
         s = dict(DEFAULT_SETTINGS)
         s.update({k: v for k, v in (settings or {}).items() if k in DEFAULT_SETTINGS})
-        t = update_tender(tid, status="running",
-                          progress={"stage": "ai", "message": "Starting AI check…", "done": 0, "total": 0,
-                                    "started_at": time.time(), "ai_only": True})
+        t = update_tender(tid, ai_progress={"running": True, "done": 0, "total": 0, "message": "Starting AI check…", "started_at": time.time()})
         th = threading.Thread(target=_ai_run_thread, args=(tid, s, project_ids, legend_ids), daemon=True)
-        _running[tid] = th
+        _running[key] = th
         th.start()
         return t
 
 
+def _ai_report(tid: str):
+    def report(done, total, message):
+        with _lock:
+            t = load_tender(tid)
+            if t:
+                ap = dict(t.get("ai_progress") or {})
+                ap.update({"running": True, "done": done, "total": total, "message": message})
+                t["ai_progress"] = ap
+                save_tender(t)
+    return report
+
+
+def _ai_run_core(tid: str, s: Dict[str, Any], project_ids, legend_ids, report=None) -> Dict[str, Any]:
+    t = load_tender(tid)
+    hts = t["house_types"]
+    mbp = {ht["project_id"]: load_state(ht["project_id"]).get("markers", []) for ht in hts}
+    zones = {}
+    for ht in hts:
+        ez = load_state(ht["project_id"]).get("excluded_zones", {}) or {}
+        for pg, zs in ez.items():
+            if zs:
+                zones[(ht["project_id"], int(pg))] = zs[0]
+    before = {pid: {m["marker_id"] for m in ms} for pid, ms in mbp.items()}
+    stats = _ai_pass(tid, s, hts, mbp, zones, _library_symbols(), project_ids, legend_ids, report=report)
+    # Merge into the latest saved state: new sheets and review decisions made meanwhile are kept
+    with _lock:
+        for pid, ms in mbp.items():
+            after = {m["marker_id"]: m for m in ms}
+            removed = before[pid] - set(after)
+            st = load_state(pid)
+            new_ms = []
+            for m in st.get("markers", []):
+                if m["marker_id"] in removed and m.get("status") in ("needs_review", "ai_unverified"):
+                    continue
+                upd = after.get(m["marker_id"])
+                if upd and upd.get("status") == "ai_verified" and m.get("status") in ("needs_review", "ai_unverified"):
+                    m = upd
+                new_ms.append(m)
+            st["markers"] = new_ms
+            save_state(pid, st)
+    return stats
+
+
 def _ai_run_thread(tid: str, s: Dict[str, Any], project_ids, legend_ids) -> None:
     try:
-        t = load_tender(tid)
-        hts = t["house_types"]
-        mbp = {ht["project_id"]: load_state(ht["project_id"]).get("markers", []) for ht in hts}
-        zones = {}
-        for ht in hts:
-            ez = load_state(ht["project_id"]).get("excluded_zones", {}) or {}
-            for pg, zs in ez.items():
-                if zs:
-                    zones[(ht["project_id"], int(pg))] = zs[0]
-        before = {pid: {m["marker_id"] for m in ms} for pid, ms in mbp.items()}
-        stats = _ai_pass(tid, s, hts, mbp, zones, _library_symbols(), project_ids, legend_ids)
-        # Merge into the latest saved state so review decisions made meanwhile are kept
-        with _lock:
-            for pid, ms in mbp.items():
-                after = {m["marker_id"]: m for m in ms}
-                removed = before[pid] - set(after)
-                st = load_state(pid)
-                new_ms = []
-                for m in st.get("markers", []):
-                    if m["marker_id"] in removed:
-                        continue
-                    upd = after.get(m["marker_id"])
-                    if upd and upd.get("status") == "ai_verified" and m.get("status") in ("needs_review", "ai_unverified"):
-                        m = upd
-                    new_ms.append(m)
-                st["markers"] = new_ms
-                save_state(pid, st)
-        update_tender(tid, status="done", ai=stats)
+        stats = _ai_run_core(tid, s, project_ids, legend_ids, report=_ai_report(tid))
         failed = stats.get("error") and not stats.get("checked")
-        _progress(tid, stage="done", ai_only=False,
-                  message=f"AI check failed: {stats['error']}" if failed else f"AI check finished · ${stats.get('cost', 0):.2f}")
+        update_tender(tid, ai=stats, ai_progress={
+            "running": False, "done": stats.get("marks_sent", 0), "total": stats.get("marks_sent", 0),
+            "failed": bool(failed),
+            "message": f"AI check failed: {stats['error']}" if failed else f"AI kept {stats['kept']}, removed {stats['removed']} · ${stats.get('cost', 0):.2f}",
+            "finished_at": time.time(),
+        })
     except Exception as e:
         traceback.print_exc()
-        update_tender(tid, status="done")
-        _progress(tid, stage="done", message=f"AI check failed: {e}", ai_only=False)
+        update_tender(tid, ai_progress={"running": False, "failed": True, "message": f"AI check failed: {e}", "finished_at": time.time()})
 
 
 # ---------------------------------------------------------------- review

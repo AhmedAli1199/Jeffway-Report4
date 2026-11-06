@@ -102,6 +102,14 @@ def set_sheets(tender_id: str, s: Sheets):
         raise HTTPException(404, "Tender or file not found")
 
 
+@router.post("/{tender_id}/stop")
+def stop(tender_id: str):
+    """Stop a running takeoff after its current sheet. Everything counted so far is kept."""
+    if not ps.load_tender(tender_id):
+        raise HTTPException(404, "Tender not found")
+    return ps.stop_run(tender_id)
+
+
 @router.post("/{tender_id}/schedule")
 async def upload_schedule(tender_id: str, file: UploadFile = File(...)):
     if not ps.load_tender(tender_id):

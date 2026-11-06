@@ -659,3 +659,9 @@ button, input, select, textarea { font: inherit; color: inherit; }
 .viewer-stage img { display: block; background: #fff; box-shadow: var(--shadow-2); user-select: none; }
 .viewer-loading { position: absolute; inset: 0; display: grid; place-items: center; color: var(--fg-2); gap: 8px; pointer-events: none; }
 .viewer-foot { padding: 6px 14px; font-size: 12px; background: var(--surface); border-top: 1px solid var(--line); }
+
+/* Live counting banner */
+.live-banner { display: flex; align-items: center; gap: 14px; padding: 14px 16px; border-radius: 14px; background: var(--surface); box-shadow: var(--shadow-1), inset 3px 0 0 var(--copper); flex-wrap: wrap; }
+.live-dot { width: 10px; height: 10px; border-radius: 50%; background: var(--copper); box-shadow: 0 0 0 0 var(--copper); animation: pulse 1.6s infinite; flex: none; }
+@keyframes pulse { 0% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--copper) 55%, transparent); } 70% { box-shadow: 0 0 0 10px transparent; } 100% { box-shadow: 0 0 0 0 transparent; } }
+.queue-live { display: flex; align-items: center; gap: 10px; padding: 8px 12px; border-radius: 10px; background: var(--copper-soft); color: var(--fg); font-size: 12.5px; }

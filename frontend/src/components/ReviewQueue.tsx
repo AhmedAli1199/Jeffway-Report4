@@ -37,6 +37,18 @@ export function ReviewQueue({
   const [confirmAll, setConfirmAll] = useState(false);
   const [busy, setBusy] = useState(false);
 
+  // Decisions sent but not yet saved: applied on top of any refresh so a mark never pops back
+  const pending = useRef<Map<string, "approve" | "reject">>(new Map());
+  const applyPending = (hs: TenderHouseMarks[]) =>
+    pending.current.size
+      ? hs.map((h) => ({
+          ...h,
+          markers: h.markers
+            .filter((m) => pending.current.get(m.marker_id) !== "reject")
+            .map((m) => (pending.current.get(m.marker_id) === "approve" ? { ...m, status: "user_verified" as const } : m)),
+        }))
+      : hs;
+
   useEffect(() => {
     api.tenderMarks(id).then((r) => {
       setTender(r.tender);
@@ -48,6 +60,19 @@ export function ReviewQueue({
       setSamples(m);
     });
   }, [id]);
+
+  const live = tender?.status === "running" || !!tender?.ai_progress?.running;
+  const curId = useRef<string | null>(null);
+  useEffect(() => {
+    if (!live) return;
+    const h = setInterval(async () => {
+      const r = await api.tenderMarks(id).catch(() => null);
+      if (!r) return;
+      setTender(r.tender);
+      setHouses(applyPending(r.house_types));
+    }, 5000);
+    return () => clearInterval(h);
+  }, [live, id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const labels = useMemo(() => {
     const m = new Map<string, { label: string; color: string; stage: string; category: string }>();
@@ -78,6 +103,15 @@ export function ReviewQueue({
 
   const cur = queue[Math.min(pos, queue.length - 1)] as Item | undefined;
   useEffect(() => {
+    const id0 = curId.current;
+    if (!id0) return;
+    const i = queue.findIndex((it) => it.m.marker_id === id0);
+    if (i >= 0 && i !== pos) setPos(i);
+  }, [queue]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    curId.current = cur?.m.marker_id ?? null;
+  }, [cur?.m.marker_id]);
+  useEffect(() => {
     if (pos > 0 && pos >= queue.length) setPos(Math.max(0, queue.length - 1));
   }, [queue.length, pos]);
 
@@ -100,11 +134,15 @@ export function ReviewQueue({
       else mutate(h.project_id, (ms) => ms.filter((x) => x.marker_id !== m.marker_id));
       setHistory((hh) => [...hh, { kind, item: cur }]);
       // The decided item leaves the queue, so the same index now points at the next one
-      api.decide(id, { project_id: h.project_id, marker_id: m.marker_id, action: kind }).catch((e) =>
-        toast({ tone: "error", title: "Couldn't save that decision", body: (e as Error).message }),
-      );
+      const next = queue[pos + 1] ?? queue[pos - 1];
+      curId.current = next ? next.m.marker_id : null;
+      pending.current.set(m.marker_id, kind);
+      api
+        .decide(id, { project_id: h.project_id, marker_id: m.marker_id, action: kind })
+        .catch((e) => toast({ tone: "error", title: "Couldn't save that decision", body: (e as Error).message }))
+        .finally(() => setTimeout(() => pending.current.delete(m.marker_id), 6000));
     },
-    [cur, id, toast],
+    [cur, id, toast, queue, pos],
   );
 
   const undo = useCallback(() => {
@@ -205,6 +243,21 @@ export function ReviewQueue({
             </div>
           </div>
 
+          {tender?.status === "running" && (
+            <div className="queue-live">
+              <span className="live-dot" aria-hidden="true" />
+              <span className="grow">
+                Still counting: {tender.progress?.sheets_done ?? 0} of {tender.progress?.sheets_total ?? "?"} sheets done.
+                New marks join this queue automatically as each sheet finishes.
+              </span>
+            </div>
+          )}
+          {tender?.ai_progress?.running && (
+            <div className="queue-live" style={{ background: "var(--ai-soft)" }}>
+              <LoaderCircle size={13} className="spin" style={{ color: "var(--ai)" }} />
+              <span className="grow">{tender.ai_progress.message}. Marks it removes disappear from the queue; kept ones show "AI confirmed".</span>
+            </div>
+          )}
           <div className="queue-progress">
             <div className="stackbar" style={{ height: 8 }}>
               <i style={{ width: `${total ? (approvedN / total) * 100 : 0}%`, background: "var(--ok)" }} />
@@ -235,8 +288,8 @@ export function ReviewQueue({
             <div className="skeleton" style={{ height: 420 }} />
           ) : !cur ? (
             <div className="card empty" style={{ padding: 56 }}>
-              <CircleCheck size={30} style={{ color: "var(--ok)" }} />
-              <h3>All done in this view</h3>
+              {tender?.status === "running" ? <LoaderCircle size={28} className="spin muted" /> : <CircleCheck size={30} style={{ color: "var(--ok)" }} />}
+              <h3>{tender?.status === "running" ? "Waiting for the next sheet…" : "All done in this view"}</h3>
               <p>
                 Nothing left above {Math.round(threshold * 100)}%
                 {house || legend ? " for this filter" : ""}. Lower the slider to check weaker matches, or go back to the overview.

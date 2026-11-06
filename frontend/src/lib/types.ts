@@ -196,7 +196,13 @@ export interface Tender {
   status: "uploaded" | "running" | "done" | "failed";
   house_types: HouseType[];
   documents: { path: string; kind: string; pages?: number; error?: string; filepath?: string; sheets?: SheetInfo[]; maybe?: number }[];
-  progress: { stage: string; message: string; done: number; total: number; started_at?: number; ai_only?: boolean };
+  progress: {
+    stage: string; message: string; done: number; total: number; started_at?: number; ai_only?: boolean;
+    sheets_done?: number; sheets_total?: number; marks_found?: number; current?: string; stopped?: boolean;
+  };
+  sheet_state?: Record<string, "pending" | "running" | "done">;
+  ai_progress?: { running: boolean; done: number; total: number; message: string; failed?: boolean } | null;
+  cancel?: boolean;
   schedule?: { file: string; sheet: string; total: number; plots: Record<string, number>; unmatched: Record<string, number> } | null;
   ai_runs?: AIRun[];
   legend_entries_removed?: number;
