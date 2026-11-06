@@ -53,7 +53,7 @@ export function useTakeoff() {
   const [selectedLegendId, setSelectedLegendId] = useState<string | null>(null);
   const [selectedMarkerId, setSelectedMarkerId] = useState<string | null>(null);
   const [filter, setFilter] = useState<ReviewFilter>("open");
-  const [threshold, setThresholdState] = useState<number>(() => store.get("pl.threshold", 0.55));
+  const [threshold, setThresholdState] = useState<number>(() => store.get("pl.threshold.v2", 0.8));
   const [tool, setTool] = useState<Tool>("select");
   const [cropTarget, setCropTarget] = useState<LegendItem | null>(null);
   const [cropIntent, setCropIntent] = useState<CropIntent | null>(null);
@@ -71,7 +71,7 @@ export function useTakeoff() {
 
   const setThreshold = (v: number) => {
     setThresholdState(v);
-    store.set("pl.threshold", v);
+    store.set("pl.threshold.v2", v);
   };
   const setApiKey = (k: string) => {
     setApiKeyState(k);
@@ -85,7 +85,7 @@ export function useTakeoff() {
 
   // ---------- Loading ----------
   const openProject = useCallback(
-    async (summary: ProjectSummary) => {
+    async (summary: ProjectSummary, at?: { page?: number; markerId?: string }) => {
       setLoad("loading");
       hydrated.current = false;
       try {
@@ -105,7 +105,11 @@ export function useTakeoff() {
           elec.find((p) => /ground floor/i.test(p.title)) ??
           elec[0] ??
           d.pages[0];
-        setPageIndex(first?.page_index ?? 0);
+        setPageIndex(at?.page ?? first?.page_index ?? 0);
+        if (at?.markerId) {
+          setSelectedMarkerId(at.markerId);
+          setFilter("all");
+        }
         store.set("pl.lastProject", summary.project_id);
         setSave("idle");
         setLoad("ready");

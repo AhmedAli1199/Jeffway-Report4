@@ -104,7 +104,9 @@ class GeometricVisionMatcher:
         angles: List[int] = [0, 90, 180, 270],
         min_confidence: float = 0.50,
         exclude_source_box: bool = True,
-        excluded_zones: Optional[List[Dict[str, Any]]] = None
+        excluded_zones: Optional[List[Dict[str, Any]]] = None,
+        template_bgr_override: Optional[np.ndarray] = None,
+        image_bgr_override: Optional[np.ndarray] = None,
     ) -> List[Dict[str, Any]]:
         """
         Runs Multi-Scale, Multi-Angle Normalized Cross-Correlation (NCC)
@@ -114,7 +116,7 @@ class GeometricVisionMatcher:
         3. Generic Interior Topology Verification (checks inner structure consistency)
         4. Non-Maximum Suppression (NMS) across rotations and scales.
         """
-        img_bgr = cv2.imread(str(full_image_path))
+        img_bgr = image_bgr_override if image_bgr_override is not None else cv2.imread(str(full_image_path))
         if img_bgr is None:
             raise ValueError(f"Could not load image at {full_image_path}")
 
@@ -133,7 +135,13 @@ class GeometricVisionMatcher:
         tw = max(10, min(tw, w_max - tx))
         th = max(10, min(th, h_max - ty))
 
-        template_raw = img_bgr[ty : ty + th, tx : tx + tw]
+        if template_bgr_override is not None:
+            # Sample image supplied directly (e.g. from the symbol library), so it is
+            # portable across sheets and PDFs; there is no source box on this page to skip.
+            template_raw = template_bgr_override
+            exclude_source_box = False
+        else:
+            template_raw = img_bgr[ty : ty + th, tx : tx + tw]
         if template_raw.size == 0:
             return []
 

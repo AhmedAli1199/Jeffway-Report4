@@ -27,6 +27,8 @@ interface Props {
   onStage: (s: Stage) => void;
   exportOpen: boolean;
   setExportOpen: (o: boolean) => void;
+  onHome: () => void;
+  backLabel: string;
 }
 
 export function AppBar(p: Props) {
@@ -60,10 +62,10 @@ export function AppBar(p: Props) {
       >
         <PanelLeft size={17} />
       </button>
-      <div className="brand">
+      <button className="brand brand-btn" onClick={p.onHome} title={p.backLabel}>
         <span className="brand-mark" aria-hidden="true" />
         Plotline
-      </div>
+      </button>
 
       <nav className="crumbs" aria-label="Location">
         <span className="sep">/</span>

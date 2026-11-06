@@ -119,3 +119,48 @@ export type CanvasMode = "paper" | "blueprint";
 
 export const APPROVED: MarkerStatus[] = ["user_verified", "manual_added"];
 export const OPEN: MarkerStatus[] = ["needs_review", "ai_unverified"];
+
+export interface HouseType {
+  project_id: string;
+  name: string;
+  filename: string;
+  filepath: string;
+  rel_path: string;
+  total_pages: number;
+  electrical_pages: { page_index: number; page_number: number; title: string }[];
+  plots: number;
+}
+
+export interface RunSettings {
+  use_ai: boolean;
+  auto_high: number;
+  ai_low: number;
+  min_keep: number;
+  max_ai_marks: number;
+  quick: boolean;
+  api_key?: string | null;
+}
+
+export interface Tender {
+  tender_id: string;
+  name: string;
+  created_at: string;
+  status: "uploaded" | "running" | "done" | "failed";
+  house_types: HouseType[];
+  documents: { path: string; kind: string; pages?: number; error?: string }[];
+  progress: { stage: string; message: string; done: number; total: number; started_at?: number };
+  settings: RunSettings;
+  ai?: { checked: number; kept: number; removed: number; calls: number; skipped: number; error: string | null };
+  duration_s?: number;
+  finished_at?: string;
+}
+
+export interface TenderHouseMarks {
+  project_id: string;
+  name: string;
+  filepath: string;
+  plots: number;
+  electrical_pages: HouseType["electrical_pages"];
+  legends: LegendItem[];
+  markers: Marker[];
+}

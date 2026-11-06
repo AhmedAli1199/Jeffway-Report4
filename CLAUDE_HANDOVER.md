@@ -137,6 +137,19 @@ Keyboard: A approve · X reject · J/K next/prev · ⇧J/⇧K next/prev sheet ·
 
 ---
 
+## 5.3 One-click tender pipeline (Nov 2026)
+`backend/app/services/pipeline_service.py` + `backend/app/api/tenders.py`, UI in `frontend/src/components/Tenders.tsx` and `ReviewQueue.tsx`.
+
+1. **Upload** (`POST /api/tenders/upload`): folder (relative paths kept), zip, or loose PDFs → `backend/data/tenders/<id>/pack/`.
+2. **Scan**: each PDF with ≥1 electrical page becomes a house type (one project in `data/projects/`); other files are listed as documents.
+3. **First pass**: every library symbol with a sample image × every electrical sheet, 4 threads. Samples come from `symbol_library.json` `template_image_b64` via `template_bgr_override`, so they work on any PDF. Identical samples are matched once.
+4. **Clean-up**: legend rows are removed by reading the CAD text (a mark with a symbol description printed just to its right is a legend entry; page rotation is applied). A detected legend area is only trusted if it contains a "Legend" heading and is narrower than half the sheet. Overlapping marks of different symbols keep the stronger one.
+5. **Bands**: ≥ `auto_high` (0.85) strong, no AI · `ai_low`–`auto_high` (0.60–0.85) sent to AI (batches of 8, capped by `max_ai_marks`) · below `ai_low` kept but hidden by default · below `min_keep` (0.55) dropped. AI-kept marks take the AI's confidence; AI-rejected marks are deleted.
+6. **Review**: `GET /api/tenders/<id>/marks`, decisions via `POST /api/tenders/<id>/decision` (approve / reject / restore for undo), crops via `GET /api/tenders/crop/image`.
+
+Timing: ~1.4 s per symbol per sheet at 3 scales on 4 cores (~2 min for a 5-sheet house type); `quick` uses one scale (~3× faster).
+Demo walkthrough: `DEMO_SCRIPT.md`.
+
 ## 6. Tender Pack Data & Cloud Drive Strategy
 
 The full Curo tender pack (`Curo Tender Docs for AI`) is approximately **688 MB** and contains dozens of PDFs for site 1664516 (Bath Road, Keynsham).

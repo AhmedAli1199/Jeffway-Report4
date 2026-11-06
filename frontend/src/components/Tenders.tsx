@@ -1,0 +1,695 @@
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+  ArrowRight, Check, ChevronDown, ChevronRight, CircleCheck, FileText, FolderOpen, FolderUp, Layers,
+  LoaderCircle, Minus, Monitor, Moon, Play, Plus, Sparkles, Sun, TriangleAlert, Upload, Zap, PencilRuler,
+} from "lucide-react";
+import { api, type PackFile } from "../lib/api";
+import { useToast } from "../lib/toast";
+import type { RunSettings, Tender, TenderHouseMarks, ThemePref } from "../lib/types";
+import { cx, isApproved } from "../lib/util";
+
+/* ------------------------------------------------------------------ shared */
+
+export function PageHeader({
+  theme, setTheme, onHome, children,
+}: { theme: ThemePref; setTheme: (t: ThemePref) => void; onHome: () => void; children?: React.ReactNode }) {
+  const next: ThemePref = theme === "system" ? "light" : theme === "light" ? "dark" : "system";
+  const Icon = theme === "dark" ? Moon : theme === "light" ? Sun : Monitor;
+  return (
+    <header className="appbar">
+      <button className="brand brand-btn" onClick={onHome} title="All tenders">
+        <span className="brand-mark" aria-hidden="true" />
+        Plotline
+      </button>
+      <nav className="crumbs grow">{children}</nav>
+      <button className="icon-btn" aria-label={`Theme: ${theme}`} title={`Theme: ${theme}`} onClick={() => setTheme(next)}>
+        <Icon size={16} />
+      </button>
+    </header>
+  );
+}
+
+/** Walk a dropped folder (Chrome/Edge/Safari) and keep relative paths. */
+async function filesFromDrop(dt: DataTransfer): Promise<PackFile[]> {
+  const out: PackFile[] = [];
+  const entries = [...dt.items].map((i) => i.webkitGetAsEntry?.()).filter(Boolean) as FileSystemEntry[];
+  if (!entries.length) return [...dt.files].map((f) => ({ file: f, path: f.name }));
+  const walk = async (e: FileSystemEntry, prefix: string): Promise<void> => {
+    if (e.isFile) {
+      const f = await new Promise<File>((res, rej) => (e as FileSystemFileEntry).file(res, rej));
+      out.push({ file: f, path: prefix + f.name });
+    } else if (e.isDirectory) {
+      const reader = (e as FileSystemDirectoryEntry).createReader();
+      let batch: FileSystemEntry[];
+      do {
+        batch = await new Promise<FileSystemEntry[]>((res, rej) => reader.readEntries(res, rej));
+        for (const c of batch) await walk(c, `${prefix}${e.name}/`);
+      } while (batch.length);
+    }
+  };
+  for (const e of entries) await walk(e, "");
+  return out;
+}
+
+const keepFile = (p: PackFile) => /\.(pdf|zip|xlsx?|csv)$/i.test(p.file.name) && !p.path.includes("__MACOSX") && !p.file.name.startsWith("._");
+
+/* ------------------------------------------------------------------ home */
+
+export function HomeView({
+  theme, setTheme, onOpenTender, onManual,
+}: {
+  theme: ThemePref;
+  setTheme: (t: ThemePref) => void;
+  onOpenTender: (id: string) => void;
+  onManual: () => void;
+}) {
+  const toast = useToast();
+  const [tenders, setTenders] = useState<Tender[] | null>(null);
+  const [drag, setDrag] = useState(false);
+  const [uploading, setUploading] = useState<string | null>(null);
+  const folderRef = useRef<HTMLInputElement>(null);
+  const filesRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    api.tenders().then(setTenders).catch(() => setTenders([]));
+  }, []);
+
+  const upload = async (files: PackFile[]) => {
+    const keep = files.filter(keepFile);
+    if (!keep.length) {
+      toast({ tone: "error", title: "No PDFs found", body: "Drop the tender pack folder, a zip, or the drawing PDFs." });
+      return;
+    }
+    const mb = keep.reduce((n, f) => n + f.file.size, 0) / 1e6;
+    setUploading(`Uploading ${keep.length} file${keep.length > 1 ? "s" : ""} · ${mb.toFixed(1)} MB…`);
+    try {
+      const t = await api.uploadTender(keep);
+      onOpenTender(t.tender_id);
+    } catch (e) {
+      toast({ tone: "error", title: "Upload failed", body: (e as Error).message });
+    } finally {
+      setUploading(null);
+    }
+  };
+
+  return (
+    <div className="shell">
+      <PageHeader theme={theme} setTheme={setTheme} onHome={() => {}} />
+      <main className="page scroll">
+        <div className="page-inner">
+          <div className="hero-block">
+            <span className="eyebrow">Jeffway Electrical · AI takeoff</span>
+            <h1>Drop in a tender pack. Get every symbol, counted.</h1>
+            <p>
+              Plotline finds the house-type drawings and their electrical sheets, counts every symbol in the library,
+              asks AI about the doubtful ones, and hands you a review queue.
+            </p>
+          </div>
+
+          <div
+            className={cx("dropzone", drag && "over", uploading && "busy")}
+            onDragOver={(e) => {
+              e.preventDefault();
+              setDrag(true);
+            }}
+            onDragLeave={() => setDrag(false)}
+            onDrop={async (e) => {
+              e.preventDefault();
+              setDrag(false);
+              upload(await filesFromDrop(e.dataTransfer));
+            }}
+          >
+            {uploading ? (
+              <>
+                <LoaderCircle size={28} className="spin" />
+                <b>{uploading}</b>
+              </>
+            ) : (
+              <>
+                <FolderUp size={30} />
+                <b>Drop the tender pack folder here</b>
+                <span className="muted">or a .zip, or the house-type PDFs</span>
+                <div className="row" style={{ marginTop: 8 }}>
+                  <button className="btn btn-copper btn-lg" onClick={() => folderRef.current?.click()}>
+                    <FolderOpen size={15} /> Choose folder
+                  </button>
+                  <button className="btn btn-ghost btn-lg" onClick={() => filesRef.current?.click()}>
+                    <Upload size={15} /> Choose files
+                  </button>
+                </div>
+              </>
+            )}
+            <input
+              ref={folderRef}
+              type="file"
+              hidden
+              multiple
+              {...({ webkitdirectory: "", directory: "" } as Record<string, string>)}
+              onChange={(e) => {
+                const fs = [...(e.target.files ?? [])].map((f) => ({ file: f, path: f.webkitRelativePath || f.name }));
+                e.target.value = "";
+                upload(fs);
+              }}
+            />
+            <input
+              ref={filesRef}
+              type="file"
+              hidden
+              multiple
+              accept=".pdf,.zip,application/pdf,application/zip"
+              onChange={(e) => {
+                const fs = [...(e.target.files ?? [])].map((f) => ({ file: f, path: f.name }));
+                e.target.value = "";
+                upload(fs);
+              }}
+            />
+          </div>
+
+          <section className="stack">
+            <div className="section-head">
+              <h2 className="h2">Tenders</h2>
+              <button className="btn btn-quiet btn-sm" onClick={onManual} title="Open a single drawing and count symbol by symbol">
+                <PencilRuler size={14} /> Manual workspace
+              </button>
+            </div>
+            {tenders === null ? (
+              <div className="skeleton" style={{ height: 64 }} />
+            ) : tenders.length === 0 ? (
+              <p className="muted">No tenders yet. Upload one above.</p>
+            ) : (
+              <div className="tender-list">
+                {tenders.map((t) => (
+                  <button key={t.tender_id} className="tender-row" onClick={() => onOpenTender(t.tender_id)}>
+                    <span className="tender-icon"><Layers size={16} /></span>
+                    <span className="meta">
+                      <b>{t.name}</b>
+                      <span className="muted">
+                        {t.house_types.length} house type{t.house_types.length === 1 ? "" : "s"} ·{" "}
+                        {t.house_types.reduce((n, h) => n + h.electrical_pages.length, 0)} electrical sheets · {t.created_at}
+                      </span>
+                    </span>
+                    <StatusPill t={t} />
+                    <ChevronRight size={16} className="muted" />
+                  </button>
+                ))}
+              </div>
+            )}
+          </section>
+        </div>
+      </main>
+    </div>
+  );
+}
+
+function StatusPill({ t }: { t: Tender }) {
+  if (t.status === "done") return <span className="pill pill-ok">Ready to review</span>;
+  if (t.status === "running") return <span className="pill pill-ai">Running</span>;
+  if (t.status === "failed") return <span className="pill pill-reject">Failed</span>;
+  return <span className="pill pill-plain">Not run</span>;
+}
+
+/* ------------------------------------------------------------------ tender */
+
+const STAGES = [
+  { id: "sheets", label: "Read the pack and render electrical sheets" },
+  { id: "matching", label: "First pass: find every library symbol" },
+  { id: "ai", label: "Second pass: AI checks borderline marks" },
+  { id: "saving", label: "Build the takeoff" },
+];
+
+export function TenderView({
+  id, theme, setTheme, onHome, onReview, onOpenDrawing, apiKey, threshold, setThreshold,
+}: {
+  id: string;
+  theme: ThemePref;
+  setTheme: (t: ThemePref) => void;
+  onHome: () => void;
+  onReview: (filter?: { project_id?: string; legend_id?: string }) => void;
+  onOpenDrawing: (ht: { project_id: string; name: string; filepath: string; filename?: string }, page?: number) => void;
+  apiKey: string;
+  threshold: number;
+  setThreshold: (n: number) => void;
+}) {
+  const toast = useToast();
+  const [t, setT] = useState<Tender | null>(null);
+  const [marks, setMarks] = useState<TenderHouseMarks[] | null>(null);
+
+  const load = useCallback(async () => {
+    try {
+      const x = await api.tender(id);
+      setT(x);
+      if (x.status === "done") setMarks((await api.tenderMarks(id)).house_types);
+    } catch (e) {
+      toast({ tone: "error", title: "Couldn't load tender", body: (e as Error).message });
+    }
+  }, [id, toast]);
+
+  useEffect(() => {
+    load();
+  }, [load]);
+
+  // Poll while running
+  useEffect(() => {
+    if (t?.status !== "running") return;
+    const h = setInterval(async () => {
+      const x = await api.tender(id).catch(() => null);
+      if (!x) return;
+      setT(x);
+      if (x.status === "done") {
+        setMarks((await api.tenderMarks(id)).house_types);
+        toast({ tone: "success", title: "Takeoff ready", body: "Everything is counted. Start the review queue." });
+      }
+    }, 1000);
+    return () => clearInterval(h);
+  }, [t?.status, id, toast]);
+
+  const run = async (s: Partial<RunSettings>) => {
+    try {
+      setT(await api.runTender(id, { ...s, api_key: apiKey || undefined }));
+    } catch (e) {
+      toast({ tone: "error", title: "Couldn't start", body: (e as Error).message });
+    }
+  };
+
+  return (
+    <div className="shell">
+      <PageHeader theme={theme} setTheme={setTheme} onHome={onHome}>
+        <span className="sep">/</span>
+        <span className="crumb-btn" style={{ cursor: "default" }}>
+          <b className="truncate">{t?.name ?? "Tender"}</b>
+        </span>
+      </PageHeader>
+      <main className="page scroll">
+        <div className="page-inner">
+          {!t ? (
+            <div className="skeleton" style={{ height: 160 }} />
+          ) : t.status === "uploaded" || t.status === "failed" ? (
+            <RunPanel t={t} onRun={run} hasKey={!!apiKey} />
+          ) : t.status === "running" ? (
+            <Progress t={t} />
+          ) : marks ? (
+            <Overview
+              t={t}
+              marks={marks}
+              threshold={threshold}
+              setThreshold={setThreshold}
+              onReview={onReview}
+              onOpenDrawing={onOpenDrawing}
+              onRerun={() => setT({ ...t, status: "uploaded" })}
+              onPlots={async (pid, n) => {
+                setMarks((ms) => ms?.map((h) => (h.project_id === pid ? { ...h, plots: n } : h)) ?? null);
+                await api.setPlots(id, pid, n).catch(() => {});
+              }}
+            />
+          ) : (
+            <div className="skeleton" style={{ height: 160 }} />
+          )}
+        </div>
+      </main>
+    </div>
+  );
+}
+
+function RunPanel({ t, onRun, hasKey }: { t: Tender; onRun: (s: Partial<RunSettings>) => void; hasKey: boolean }) {
+  const [useAI, setUseAI] = useState(t.settings?.use_ai ?? true);
+  const [quick, setQuick] = useState(t.settings?.quick ?? false);
+  const [high, setHigh] = useState(t.settings?.auto_high ?? 0.85);
+  const [low, setLow] = useState(t.settings?.ai_low ?? 0.6);
+  const [cap, setCap] = useState(t.settings?.max_ai_marks ?? 400);
+  const [showDocs, setShowDocs] = useState(false);
+  const sheets = t.house_types.reduce((n, h) => n + h.electrical_pages.length, 0);
+
+  return (
+    <div className="stack">
+      <div className="hero-block">
+        <span className="eyebrow">Step 1 of 2 · Check the pack</span>
+        <h1>{t.name}</h1>
+        <p>
+          Found <b>{t.house_types.length}</b> house-type drawing{t.house_types.length === 1 ? "" : "s"} with{" "}
+          <b>{sheets}</b> electrical sheets. {t.documents.length} other document{t.documents.length === 1 ? "" : "s"} set aside.
+        </p>
+        {t.status === "failed" && (
+          <div className="callout" style={{ color: "var(--reject)" }}>
+            <TriangleAlert size={14} /> {t.progress?.message}
+          </div>
+        )}
+      </div>
+
+      <div className="grid-2">
+        <div className="card">
+          <div className="section-head">
+            <span className="eyebrow">House types</span>
+          </div>
+          <div className="list" style={{ padding: 0 }}>
+            {t.house_types.map((h) => (
+              <div key={h.project_id} className="item" style={{ cursor: "default" }}>
+                <span className="tender-icon"><FileText size={15} /></span>
+                <span className="meta">
+                  <span className="title">{h.name}</span>
+                  <span className="sub">{h.electrical_pages.map((p) => p.title || `p.${p.page_number}`).join(" · ")}</span>
+                </span>
+                <span className="badge-count">{h.electrical_pages.length} sheets</span>
+              </div>
+            ))}
+            {t.house_types.length === 0 && <p className="muted">No drawings with electrical sheets were found.</p>}
+          </div>
+          {t.documents.length > 0 && (
+            <>
+              <button className="btn btn-quiet btn-sm" style={{ justifySelf: "start" }} onClick={() => setShowDocs(!showDocs)}>
+                {showDocs ? <ChevronDown size={14} /> : <ChevronRight size={14} />} Other documents ({t.documents.length})
+              </button>
+              {showDocs && (
+                <ul className="doc-list">
+                  {t.documents.map((d) => (
+                    <li key={d.path} className="truncate muted">{d.path}</li>
+                  ))}
+                </ul>
+              )}
+            </>
+          )}
+        </div>
+
+        <div className="card">
+          <div className="section-head">
+            <span className="eyebrow">How to run</span>
+          </div>
+          <label className="toggle-row">
+            <input type="checkbox" checked={useAI} onChange={(e) => setUseAI(e.target.checked)} />
+            <span>
+              <b>AI second pass on borderline marks</b>
+              <small>
+                Only marks scoring {Math.round(low * 100)}–{Math.round(high * 100)}% go to AI. Strong matches skip it.
+                {!hasKey && " Uses the server's OpenAI key."}
+              </small>
+            </span>
+          </label>
+          <label className="toggle-row">
+            <input type="checkbox" checked={quick} onChange={(e) => setQuick(e.target.checked)} />
+            <span>
+              <b>Quick scan</b>
+              <small>One scale instead of three. About 3× faster, may miss a few fittings.</small>
+            </span>
+          </label>
+          <div className="bands">
+            <div className="band-bar">
+              <i style={{ width: `${low * 100}%`, background: "var(--surface-3)" }} />
+              <i style={{ width: `${(high - low) * 100}%`, background: useAI ? "var(--ai)" : "var(--review)" }} />
+              <i style={{ width: `${(1 - high) * 100}%`, background: "var(--ok)" }} />
+            </div>
+            <div className="band-legend">
+              <span>Below {Math.round(low * 100)}%: {useAI ? "kept, hidden" : "hidden"}</span>
+              <span>{useAI ? "AI checks" : "You review"}</span>
+              <span>{Math.round(high * 100)}%+: strong</span>
+            </div>
+            <div className="grid2">
+              <div className="field">
+                <label htmlFor="low">AI from</label>
+                <input id="low" type="range" className="slider" min={0.55} max={0.8} step={0.01} value={low} onChange={(e) => setLow(Number(e.target.value))} />
+              </div>
+              <div className="field">
+                <label htmlFor="high">Strong from</label>
+                <input id="high" type="range" className="slider" min={0.75} max={0.95} step={0.01} value={high} onChange={(e) => setHigh(Number(e.target.value))} />
+              </div>
+            </div>
+            {useAI && (
+              <div className="field">
+                <label htmlFor="cap">AI budget: at most {cap} marks (≈ {Math.ceil(cap / 8)} AI calls)</label>
+                <input id="cap" type="range" className="slider" min={50} max={1500} step={50} value={cap} onChange={(e) => setCap(Number(e.target.value))} />
+              </div>
+            )}
+          </div>
+          <button
+            className="btn btn-copper btn-lg"
+            disabled={!t.house_types.length}
+            onClick={() => onRun({ use_ai: useAI, quick, auto_high: high, ai_low: low, max_ai_marks: cap })}
+          >
+            <Play size={15} /> Run full takeoff
+          </button>
+          <span className="muted" style={{ fontSize: 12 }}>
+            Roughly {Math.max(1, Math.round((sheets * 31 * (quick ? 0.5 : 1.3)) / 60))} min for {sheets} sheets on a 4-core machine.
+          </span>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function Progress({ t }: { t: Tender }) {
+  const [now, setNow] = useState(Date.now());
+  useEffect(() => {
+    const h = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(h);
+  }, []);
+  const p = t.progress;
+  const idx = STAGES.findIndex((s) => s.id === p.stage);
+  const pct = p.total ? (p.done / p.total) * 100 : 0;
+  const secs = p.started_at ? Math.round(now / 1000 - p.started_at) : 0;
+  return (
+    <div className="stack" style={{ maxWidth: 680, margin: "40px auto" }}>
+      <div className="hero-block">
+        <span className="eyebrow">Step 2 of 2 · Running · {Math.floor(secs / 60)}:{String(secs % 60).padStart(2, "0")}</span>
+        <h1>Counting {t.name}</h1>
+      </div>
+      <div className="card">
+        <ol className="stages">
+          {STAGES.map((s, i) => {
+            const state = i < idx ? "done" : i === idx ? "now" : "todo";
+            const skipped = s.id === "ai" && !t.settings?.use_ai;
+            return (
+              <li key={s.id} className={cx("stage", state, skipped && "skipped")}>
+                <span className="stage-dot">
+                  {state === "done" ? <Check size={12} /> : state === "now" ? <LoaderCircle size={12} className="spin" /> : null}
+                </span>
+                <div className="grow">
+                  <b>{s.label}</b>
+                  {skipped && <small className="muted"> · off</small>}
+                  {state === "now" && (
+                    <>
+                      <div className="progress-line"><i style={{ width: `${pct}%` }} /></div>
+                      <small className="muted truncate" style={{ display: "block" }}>
+                        {p.total ? `${p.done} / ${p.total} · ` : ""}
+                        {p.message}
+                      </small>
+                    </>
+                  )}
+                </div>
+              </li>
+            );
+          })}
+        </ol>
+      </div>
+    </div>
+  );
+}
+
+function Overview({
+  t, marks, threshold, setThreshold, onReview, onOpenDrawing, onRerun, onPlots,
+}: {
+  t: Tender;
+  marks: TenderHouseMarks[];
+  threshold: number;
+  setThreshold: (n: number) => void;
+  onReview: (filter?: { project_id?: string; legend_id?: string }) => void;
+  onOpenDrawing: (ht: { project_id: string; name: string; filepath: string }, page?: number) => void;
+  onRerun: () => void;
+  onPlots: (pid: string, n: number) => void;
+}) {
+  const [open, setOpen] = useState<string | null>(marks[0]?.project_id ?? null);
+
+  const counted = (m: TenderHouseMarks["markers"][number]) => isApproved(m) || m.confidence_score >= threshold;
+
+  const data = useMemo(() => {
+    const legends = new Map<string, { label: string; color: string; stage: string }>();
+    for (const h of marks) for (const l of h.legends) legends.set(l.legend_id, { label: l.label, color: l.color, stage: l.fix_stage });
+    const matrix = new Map<string, Map<string, number>>();
+    let found = 0, toReview = 0, approved = 0;
+    const perHouse = new Map<string, { found: number; review: number; approved: number; pages: Map<number, number> }>();
+    for (const h of marks) {
+      const ph = { found: 0, review: 0, approved: 0, pages: new Map<number, number>() };
+      for (const m of h.markers) {
+        if (!counted(m)) continue;
+        found++;
+        ph.found++;
+        ph.pages.set(m.page_index, (ph.pages.get(m.page_index) ?? 0) + 1);
+        if (isApproved(m)) {
+          approved++;
+          ph.approved++;
+        } else {
+          toReview++;
+          ph.review++;
+        }
+        const row = matrix.get(m.legend_id) ?? new Map<string, number>();
+        row.set(h.project_id, (row.get(h.project_id) ?? 0) + 1);
+        matrix.set(m.legend_id, row);
+      }
+      perHouse.set(h.project_id, ph);
+    }
+    const rows = [...matrix.entries()]
+      .map(([lid, row]) => ({ lid, row, total: [...row.values()].reduce((a, b) => a + b, 0), ...(legends.get(lid) ?? { label: lid, color: "#999", stage: "" }) }))
+      .sort((a, b) => b.total - a.total);
+    return { rows, found, toReview, approved, perHouse };
+  }, [marks, threshold]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const sheets = marks.reduce((n, h) => n + h.electrical_pages.length, 0);
+  const ai = t.ai;
+
+  return (
+    <div className="stack">
+      <div className="overview-head">
+        <div className="hero-block">
+          <span className="eyebrow">
+            Takeoff · {t.finished_at} · {t.duration_s ? `${Math.floor(t.duration_s / 60)}m ${t.duration_s % 60}s` : ""}
+          </span>
+          <h1>{t.name}</h1>
+        </div>
+        <div className="row">
+          <button className="btn btn-ghost" onClick={onRerun}>
+            <Zap size={14} /> Run again
+          </button>
+          <button className="btn btn-copper btn-lg" onClick={() => onReview()} disabled={!data.toReview}>
+            Start review queue <span className="kbd">{data.toReview}</span> <ArrowRight size={15} />
+          </button>
+        </div>
+      </div>
+
+      <div className="tiles">
+        <div className="tile"><b>{marks.length}</b><span>House types</span></div>
+        <div className="tile"><b>{sheets}</b><span>Electrical sheets</span></div>
+        <div className="tile"><b>{data.found}</b><span>Symbols found ≥ {Math.round(threshold * 100)}%</span></div>
+        <div className="tile">
+          <b>{ai ? ai.kept + ai.removed : "–"}</b>
+          <span>
+            {ai && t.settings.use_ai
+              ? ai.error && !ai.checked
+                ? "AI check failed"
+                : `AI checked · kept ${ai.kept}, removed ${ai.removed}`
+              : "AI check off"}
+          </span>
+        </div>
+        <div className="tile accent"><b>{data.toReview}</b><span>Waiting for you · {data.approved} approved</span></div>
+      </div>
+      {ai?.error && (
+        <div className="callout" style={{ color: "var(--reject)" }}>
+          <TriangleAlert size={14} />
+          <span>
+            AI second pass didn't run fully: {ai.error}. Borderline marks are left for you to review; lower the threshold to see them.
+          </span>
+        </div>
+      )}
+
+      <div className="card row" style={{ gap: 16 }}>
+        <span className="eyebrow" style={{ whiteSpace: "nowrap" }}>Count marks scoring at least</span>
+        <input type="range" className="slider grow" min={0.55} max={0.95} step={0.01} value={threshold} onChange={(e) => setThreshold(Number(e.target.value))} />
+        <b className="mono" style={{ minWidth: 44 }}>{Math.round(threshold * 100)}%</b>
+      </div>
+
+      <div className="grid-overview">
+        <div className="stack" style={{ gap: 10 }}>
+          <span className="eyebrow">House types</span>
+          {marks.map((h) => {
+            const ph = data.perHouse.get(h.project_id)!;
+            const isOpen = open === h.project_id;
+            const done = ph.found ? ph.approved / ph.found : 0;
+            return (
+              <div key={h.project_id} className={cx("ht-card", isOpen && "open")}>
+                <button className="ht-head" onClick={() => setOpen(isOpen ? null : h.project_id)}>
+                  {isOpen ? <ChevronDown size={15} /> : <ChevronRight size={15} />}
+                  <span className="grow" style={{ textAlign: "left" }}>
+                    <b>{h.name}</b>
+                    <small className="muted" style={{ display: "block" }}>
+                      {ph.found} symbols · {h.electrical_pages.length} sheets
+                    </small>
+                  </span>
+                  {ph.review === 0 && ph.found > 0 ? (
+                    <span className="pill pill-ok">Reviewed</span>
+                  ) : (
+                    <span className="pill pill-review">{ph.review} to review</span>
+                  )}
+                </button>
+                <div className="stackbar" style={{ margin: "0 14px" }}><i style={{ width: `${done * 100}%`, background: "var(--ok)" }} /></div>
+                {isOpen && (
+                  <div className="ht-body">
+                    <div className="row" style={{ justifyContent: "space-between" }}>
+                      <span className="muted">Plots of this type</span>
+                      <div className="row" style={{ gap: 2 }}>
+                        <button className="icon-btn icon-btn-sm" aria-label="Fewer plots" onClick={() => onPlots(h.project_id, Math.max(1, h.plots - 1))}><Minus size={13} /></button>
+                        <input className="input mono" style={{ width: 52, height: 26, textAlign: "center" }} type="number" min={1} value={h.plots}
+                          onChange={(e) => onPlots(h.project_id, Math.max(1, Number(e.target.value) || 1))} aria-label="Plots" />
+                        <button className="icon-btn icon-btn-sm" aria-label="More plots" onClick={() => onPlots(h.project_id, h.plots + 1)}><Plus size={13} /></button>
+                      </div>
+                    </div>
+                    <div className="list" style={{ padding: 0 }}>
+                      {h.electrical_pages.map((p) => (
+                        <button key={p.page_index} className="item" onClick={() => onOpenDrawing(h, p.page_index)}>
+                          <span className="thumb"><img loading="lazy" src={api.thumbnailUrl(h.filepath, p.page_index)} alt="" /></span>
+                          <span className="meta">
+                            <span className="title">{p.title || `Page ${p.page_number}`}</span>
+                            <span className="sub mono">p.{p.page_number}</span>
+                          </span>
+                          <span className="badge-count">{ph.pages.get(p.page_index) ?? 0}</span>
+                        </button>
+                      ))}
+                    </div>
+                    <div className="row">
+                      <button className="btn btn-primary btn-sm grow" disabled={!ph.review} onClick={() => onReview({ project_id: h.project_id })}>
+                        Review this house type
+                      </button>
+                      <button className="btn btn-ghost btn-sm grow" onClick={() => onOpenDrawing(h)}>
+                        Open drawings <ArrowRight size={13} />
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+
+        <div className="card" style={{ padding: 0, overflow: "hidden" }}>
+          <div className="section-head" style={{ padding: "12px 14px" }}>
+            <span className="eyebrow">Symbols across the tender</span>
+            <span className="muted" style={{ fontSize: 12 }}>Click a row to review just that symbol</span>
+          </div>
+          <div style={{ overflowX: "auto" }}>
+            <table className="boq">
+              <thead>
+                <tr>
+                  <th>Symbol</th>
+                  {marks.map((h) => <th key={h.project_id} title={h.name}>{h.name.replace(/^The /, "").slice(0, 12)}</th>)}
+                  <th>Per set</th>
+                  <th title="Each house type × its plots">× plots</th>
+                </tr>
+              </thead>
+              <tbody>
+                {data.rows.map((r) => (
+                  <tr key={r.lid} className="click" onClick={() => onReview({ legend_id: r.lid })}>
+                    <td>
+                      <span className="label" style={{ maxWidth: 260 }}>
+                        <span className="swatch" style={{ background: r.color }} />
+                        <span title={r.label}>{r.label}</span>
+                      </span>
+                    </td>
+                    {marks.map((h) => (
+                      <td key={h.project_id} className={cx("num", !r.row.get(h.project_id) && "zero")}>{r.row.get(h.project_id) ?? 0}</td>
+                    ))}
+                    <td className="num">{r.total}</td>
+                    <td className="num">{marks.reduce((n, h) => n + (r.row.get(h.project_id) ?? 0) * h.plots, 0)}</td>
+                  </tr>
+                ))}
+                {data.rows.length === 0 && (
+                  <tr><td colSpan={marks.length + 3} className="muted" style={{ textAlign: "center", padding: 24 }}>
+                    <CircleCheck size={16} /> Nothing above {Math.round(threshold * 100)}%. Lower the slider to see weaker matches.
+                  </td></tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+      <p className="muted" style={{ fontSize: 12 }}>
+        <Sparkles size={12} /> Counts include approved marks plus unreviewed marks at or above the threshold. Approve or delete them in the
+        review queue to firm up the numbers.
+      </p>
+    </div>
+  );
+}

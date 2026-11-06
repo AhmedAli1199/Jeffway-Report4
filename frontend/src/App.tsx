@@ -15,6 +15,30 @@ import { BusyBar, ReviewDock, ToolHint, Toolbox, ViewBox, ZoomBox } from "./comp
 import { AICheckModal, LibraryModal, RoomModal, SettingsModal, ShortcutsModal, SymbolModal } from "./components/Modals";
 import { CommandPalette, type PaletteItem } from "./components/CommandPalette";
 import { SymbolSample } from "./components/ui";
+import { HomeView, TenderView } from "./components/Tenders";
+import { ReviewQueue } from "./components/ReviewQueue";
+
+type View =
+  | { name: "home" }
+  | { name: "tender"; id: string }
+  | { name: "review"; id: string; project_id?: string; legend_id?: string }
+  | { name: "workspace"; tender?: string };
+
+function readHash(): View {
+  const [kind, id, a, b] = location.hash.replace(/^#/, "").split("-");
+  if (kind === "tender" && id) return { name: "tender", id };
+  if (kind === "review" && id) return { name: "review", id, project_id: a || undefined, legend_id: b || undefined };
+  if (kind === "workspace") return { name: "workspace", tender: id || undefined };
+  return { name: "home" };
+}
+function writeHash(v: View) {
+  const h =
+    v.name === "tender" ? `tender-${v.id}`
+    : v.name === "review" ? `review-${v.id}-${v.project_id ?? ""}-${v.legend_id ?? ""}`.replace(/-+$/, "")
+    : v.name === "workspace" ? `workspace${v.tender ? `-${v.tender}` : ""}`
+    : "";
+  if (location.hash.replace(/^#/, "") !== h) history.pushState(null, "", h ? `#${h}` : location.pathname);
+}
 
 type LeftMode = "open" | "rail" | "hidden";
 type Dialog = null | "settings" | "library" | "shortcuts" | "ai" | "palette";
@@ -41,6 +65,29 @@ function useTheme() {
 export default function App() {
   const t = useTakeoff();
   const theme = useTheme();
+  const [view, setViewState] = useState<View>(readHash);
+  const go = useCallback((v: View) => {
+    writeHash(v);
+    setViewState(v);
+  }, []);
+  useEffect(() => {
+    const on = () => setViewState(readHash());
+    window.addEventListener("popstate", on);
+    return () => window.removeEventListener("popstate", on);
+  }, []);
+  const openDrawing = async (
+    ht: { project_id: string; name: string; filepath: string; filename?: string },
+    tenderId: string,
+    page?: number,
+    markerId?: string,
+  ) => {
+    go({ name: "workspace", tender: tenderId });
+    await t.openProject({ project_id: ht.project_id, name: ht.name, filepath: ht.filepath, filename: ht.filename ?? "" }, { page, markerId });
+  };
+  const leaveWorkspace = async (v: View) => {
+    if (t.save === "dirty") await t.saveNow();
+    go(v);
+  };
 
   const [leftMode, setLeftMode] = useState<LeftMode>(() => store.get("pl.leftMode", "open"));
   const [rightOpen, setRightOpen] = useState<boolean>(() => store.get("pl.rightOpen", true));
@@ -141,6 +188,7 @@ export default function App() {
   const keyRef = useRef<(e: KeyboardEvent) => void>(() => {});
   keyRef.current = (e: KeyboardEvent) => {
     const mod = e.metaKey || e.ctrlKey;
+    if (view.name !== "workspace") return;
     if (mod && e.key.toLowerCase() === "k") {
       e.preventDefault();
       setDialog((d) => (d === "palette" ? null : "palette"));
@@ -152,6 +200,7 @@ export default function App() {
       return;
     }
     const el = e.target as HTMLElement;
+    if (view.name !== "workspace") return;
     if (modalOpen || el.closest("input, textarea, select, [contenteditable]") || mod || e.altKey) return;
 
     const k = e.key;
@@ -245,6 +294,50 @@ export default function App() {
     return items;
   }, [t, mode, theme]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // ---------- Tender pipeline views ----------
+  if (view.name === "home") {
+    return (
+      <HomeView
+        theme={theme.pref}
+        setTheme={theme.setPref}
+        onOpenTender={(id) => go({ name: "tender", id })}
+        onManual={() => go({ name: "workspace" })}
+      />
+    );
+  }
+  if (view.name === "tender") {
+    return (
+      <TenderView
+        key={view.id}
+        id={view.id}
+        theme={theme.pref}
+        setTheme={theme.setPref}
+        onHome={() => go({ name: "home" })}
+        onReview={(f) => go({ name: "review", id: view.id, ...f })}
+        onOpenDrawing={(ht, page) => openDrawing(ht, view.id, page)}
+        apiKey={t.apiKey}
+        threshold={t.threshold}
+        setThreshold={t.setThreshold}
+      />
+    );
+  }
+  if (view.name === "review") {
+    return (
+      <ReviewQueue
+        key={`${view.id}-${view.project_id}-${view.legend_id}`}
+        id={view.id}
+        theme={theme.pref}
+        setTheme={theme.setPref}
+        onHome={() => go({ name: "home" })}
+        onBack={() => go({ name: "tender", id: view.id })}
+        onOpenDrawing={(ht, page, markerId) => openDrawing(ht, view.id, page, markerId)}
+        initial={{ project_id: view.project_id, legend_id: view.legend_id }}
+        threshold={t.threshold}
+        setThreshold={t.setThreshold}
+      />
+    );
+  }
+
   // ---------- Full-page states ----------
   if (t.load === "offline" || t.load === "empty") {
     return (
@@ -308,6 +401,8 @@ export default function App() {
         onShortcuts={() => setDialog("shortcuts")}
         onLibrary={() => setDialog("library")}
         onStage={onStage}
+        onHome={() => leaveWorkspace(view.tender ? { name: "tender", id: view.tender } : { name: "home" })}
+        backLabel={view.tender ? "Back to tender overview" : "All tenders"}
         exportOpen={exportOpen}
         setExportOpen={setExportOpen}
       />

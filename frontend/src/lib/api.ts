@@ -9,6 +9,9 @@ import type {
   Rect,
   RoomZone,
   Verification,
+  Tender,
+  TenderHouseMarks,
+  RunSettings,
 } from "./types";
 
 export const API_BASE: string =
@@ -86,6 +89,11 @@ export interface ExportPayload {
 
 const q = encodeURIComponent;
 
+export interface PackFile {
+  file: File;
+  path: string;
+}
+
 export const api = {
   listProjects: () => request<ProjectSummary[]>("/projects/list", undefined, "Couldn't load projects"),
 
@@ -162,6 +170,30 @@ export const api = {
 
   library: () => request<LibrarySymbol[]>("/symbols/library", undefined, "Couldn't load symbol library"),
   saveLibrary: (lib: LibrarySymbol[]) => postJson<unknown>("/symbols/library", lib, "Couldn't save symbol library"),
+
+  // ---- Tender pipeline
+  tenders: () => request<Tender[]>("/tenders", undefined, "Couldn't load tenders"),
+  tender: (id: string) => request<Tender>(`/tenders/${q(id)}`, undefined, "Couldn't load tender"),
+  async uploadTender(files: PackFile[], name?: string): Promise<Tender> {
+    const form = new FormData();
+    for (const f of files) {
+      form.append("files", f.file, f.file.name);
+      form.append("paths", f.path);
+    }
+    if (name) form.append("name", name);
+    return request<Tender>("/tenders/upload", { method: "POST", body: form }, "Upload failed");
+  },
+  runTender: (id: string, s: Partial<RunSettings>) => postJson<Tender>(`/tenders/${q(id)}/run`, s, "Couldn't start the run"),
+  tenderMarks: (id: string) =>
+    request<{ tender: Tender; house_types: TenderHouseMarks[] }>(`/tenders/${q(id)}/marks`, undefined, "Couldn't load marks"),
+  decide: (id: string, body: { project_id: string; marker_id: string; action: "approve" | "reject" | "restore"; marker?: Marker }) =>
+    postJson<{ ok: boolean }>(`/tenders/${q(id)}/decision`, body, "Couldn't save decision"),
+  approveMany: (id: string, project_ids: string[], marker_ids: string[]) =>
+    postJson<{ approved: number }>(`/tenders/${q(id)}/approve-many`, { project_ids, marker_ids }, "Couldn't approve"),
+  setPlots: (id: string, project_id: string, plots: number) =>
+    postJson<Tender>(`/tenders/${q(id)}/plots`, { project_id, plots }, "Couldn't save plots"),
+  cropUrl: (filepath: string, page: number, m: { x: number; y: number; width: number; height: number }, pad = 2.2, size = 360) =>
+    `${API_BASE}/tenders/crop/image?filepath=${q(filepath)}&page_index=${page}&x=${m.x}&y=${m.y}&w=${m.width}&h=${m.height}&pad=${pad}&size=${size}`,
 
   exportTakeoff: (p: ExportPayload) =>
     download("/exports/excel", p, `${p.project_name} - Takeoff.xlsx`, "Excel export failed"),

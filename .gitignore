@@ -51,3 +51,8 @@ __MACOSX/
 
 # Antigravity Brain & scratch artifacts
 .gemini/
+
+# Uploaded tender packs and the projects the pipeline creates from them
+backend/data/tenders/
+backend/data/projects/proj_*/
+!backend/data/projects/proj_avebury_curo/
