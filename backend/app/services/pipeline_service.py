@@ -175,8 +175,22 @@ def scan_pack(tid: str) -> None:
             documents.append({"path": rel, "kind": "pdf", "error": str(e)})
             continue
         elec = [p for p in info["pages"] if p.get("is_electrical")]
+        all_pages = [
+            {
+                "page_index": p["page_index"],
+                "page_number": p["page_number"],
+                "title": p.get("title", ""),
+                "verdict": (p.get("evidence") or {}).get("verdict", "yes" if p.get("is_electrical") else "no"),
+                "legend_hits": (p.get("evidence") or {}).get("legend_hits", 0),
+                "reasons": (p.get("evidence") or {}).get("reasons", []),
+            }
+            for p in info["pages"]
+        ]
         if not elec:
-            documents.append({"path": rel, "kind": "pdf", "pages": info["total_pages"]})
+            documents.append({
+                "path": rel, "kind": "pdf", "pages": info["total_pages"], "filepath": str(pdf.resolve()),
+                "sheets": all_pages, "maybe": sum(1 for p in all_pages if p["verdict"] == "maybe"),
+            })
             continue
         house_types.append({
             "project_id": f"proj_{uuid.uuid4().hex[:8]}",
@@ -189,6 +203,7 @@ def scan_pack(tid: str) -> None:
                 {"page_index": p["page_index"], "page_number": p["page_number"], "title": p.get("title", "")}
                 for p in elec
             ],
+            "sheets": all_pages,
             "plots": 1,
         })
     _apply_schedule(tid, house_types, documents)
@@ -814,3 +829,59 @@ def set_plots(tid: str, project_id: str, plots: int) -> Dict[str, Any]:
                 ht["plots_source"] = {"manual": True}
         save_tender(t)
         return t
+
+
+
+# ---------------------------------------------------------------- sheet selection
+
+def set_sheets(tid: str, rel_path: str, page_indexes: List[int]) -> Dict[str, Any]:
+    """Choose which pages of a PDF are counted. Picking pages in a 'document' makes it a house type;
+    clearing every page of a house type moves it back to documents."""
+    with _lock:
+        t = load_tender(tid)
+        if not t:
+            raise KeyError(tid)
+        chosen = sorted(set(int(i) for i in page_indexes))
+        ht = next((h for h in t["house_types"] if h["rel_path"] == rel_path), None)
+        doc = next((d for d in t["documents"] if d.get("path") == rel_path), None)
+        if ht:
+            sheets = ht.get("sheets") or []
+            if not chosen:
+                t["house_types"].remove(ht)
+                t["documents"].append({
+                    "path": rel_path, "kind": "pdf", "pages": ht["total_pages"], "filepath": ht["filepath"],
+                    "sheets": sheets, "maybe": sum(1 for p in sheets if p.get("verdict") == "maybe"),
+                    "plots": ht.get("plots", 1), "plots_source": ht.get("plots_source"),
+                })
+        elif doc and chosen:
+            sheets = doc.get("sheets") or []
+            ht = {
+                "project_id": f"proj_{uuid.uuid4().hex[:8]}",
+                "name": Path(rel_path).stem,
+                "filename": Path(rel_path).name,
+                "filepath": doc["filepath"],
+                "rel_path": rel_path,
+                "total_pages": doc.get("pages") or len(sheets),
+                "sheets": sheets,
+                "plots": doc.get("plots", 1),
+                "plots_source": doc.get("plots_source"),
+            }
+            t["documents"].remove(doc)
+            t["house_types"].append(ht)
+        elif not doc:
+            raise KeyError(rel_path)
+        if ht and chosen:
+            by_idx = {p["page_index"]: p for p in (ht.get("sheets") or [])}
+            ht["electrical_pages"] = [
+                {"page_index": i, "page_number": i + 1, "title": (by_idx.get(i) or {}).get("title", "")} for i in chosen
+            ]
+            ht["sheets_confirmed"] = True
+        save_tender(t)
+    # A newly promoted house type may now match the schedule
+    if ht and chosen and not ht.get("plots_source"):
+        t = load_tender(tid)
+        _apply_schedule(tid, t["house_types"], t["documents"])
+        t2 = load_tender(tid)
+        t2["house_types"] = t["house_types"]
+        save_tender(t2)
+    return load_tender(tid)

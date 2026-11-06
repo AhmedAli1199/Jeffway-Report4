@@ -88,6 +88,20 @@ def ai_run(tender_id: str, r: AIRequest):
         raise HTTPException(409, str(e))
 
 
+class Sheets(BaseModel):
+    rel_path: str
+    page_indexes: List[int]
+
+
+@router.post("/{tender_id}/sheets")
+def set_sheets(tender_id: str, s: Sheets):
+    """Choose which pages of a PDF in the pack are counted."""
+    try:
+        return ps.set_sheets(tender_id, s.rel_path, s.page_indexes)
+    except KeyError:
+        raise HTTPException(404, "Tender or file not found")
+
+
 @router.post("/{tender_id}/schedule")
 async def upload_schedule(tender_id: str, file: UploadFile = File(...)):
     if not ps.load_tender(tender_id):

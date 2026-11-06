@@ -9,6 +9,8 @@ import type { RunSettings, Tender, TenderHouseMarks, ThemePref } from "../lib/ty
 import { cx, isApproved } from "../lib/util";
 import { CostPill, refreshCosts, usd } from "./Costs";
 import { AuditList } from "./AuditLog";
+import { SheetPicker } from "./SheetPicker";
+import type { SheetInfo } from "../lib/types";
 import { Modal } from "./ui";
 import type { AIEstimate } from "../lib/types";
 
@@ -331,6 +333,15 @@ function RunPanel({ t, onRun, hasKey }: { t: Tender; onRun: (s: Partial<RunSetti
   const useAI = aiMode !== "off";
   const [schedule, setSchedule] = useState(t.schedule ?? null);
   const [houses, setHouses] = useState(t.house_types);
+  const [docs, setDocs] = useState(t.documents);
+  const [picking, setPicking] = useState<
+    { relPath: string; filepath: string; sheets: SheetInfo[]; selected: number[] } | null
+  >(null);
+  const applyTender = (nt: Tender) => {
+    setHouses(nt.house_types);
+    setDocs(nt.documents);
+    setSchedule(nt.schedule ?? null);
+  };
   const schedRef = useRef<HTMLInputElement>(null);
   const toast = useToast();
   const [quick, setQuick] = useState(t.settings?.quick ?? false);
@@ -338,7 +349,8 @@ function RunPanel({ t, onRun, hasKey }: { t: Tender; onRun: (s: Partial<RunSetti
   const [low, setLow] = useState(t.settings?.ai_low ?? 0.6);
   const [cap, setCap] = useState(t.settings?.max_ai_marks ?? 400);
   const [showDocs, setShowDocs] = useState(false);
-  const sheets = t.house_types.reduce((n, h) => n + h.electrical_pages.length, 0);
+  const sheets = houses.reduce((n, h) => n + h.electrical_pages.length, 0);
+  const maybeDocs = docs.filter((d) => (d.maybe ?? 0) > 0);
 
   return (
     <div className="stack">
@@ -346,8 +358,9 @@ function RunPanel({ t, onRun, hasKey }: { t: Tender; onRun: (s: Partial<RunSetti
         <span className="eyebrow">Step 1 of 2 · Check the pack</span>
         <h1>{t.name}</h1>
         <p>
-          Found <b>{t.house_types.length}</b> house-type drawing{t.house_types.length === 1 ? "" : "s"} with{" "}
-          <b>{sheets}</b> electrical sheets. {t.documents.length} other document{t.documents.length === 1 ? "" : "s"} set aside.
+          Found <b>{houses.length}</b> house-type drawing{houses.length === 1 ? "" : "s"} with{" "}
+          <b>{sheets}</b> electrical sheets. {docs.length} other document{docs.length === 1 ? "" : "s"} set aside.
+          Click a drawing to check exactly which sheets get counted.
         </p>
         {t.status === "failed" && (
           <div className="callout" style={{ color: "var(--reject)" }}>
@@ -359,21 +372,37 @@ function RunPanel({ t, onRun, hasKey }: { t: Tender; onRun: (s: Partial<RunSetti
       <div className="grid-2">
         <div className="card">
           <div className="section-head">
-            <span className="eyebrow">House types</span>
+            <span className="eyebrow">House types · sheets to count</span>
           </div>
           <div className="list" style={{ padding: 0 }}>
-            {houses.map((h) => (
-              <div key={h.project_id} className="item" style={{ cursor: "default" }}>
-                <span className="tender-icon"><FileText size={15} /></span>
-                <span className="meta">
-                  <span className="title">{h.name}</span>
-                  <span className="sub">{h.electrical_pages.map((p) => p.title || `p.${p.page_number}`).join(" · ")}</span>
-                </span>
-                <span className="badge-count">{h.electrical_pages.length} sheets</span>
-                <PlotsBadge h={h} />
-              </div>
-            ))}
-            {t.house_types.length === 0 && <p className="muted">No drawings with electrical sheets were found.</p>}
+            {houses.map((h) => {
+              const maybe = (h.sheets ?? []).filter((s) => s.verdict === "maybe" && !h.electrical_pages.some((p) => p.page_index === s.page_index)).length;
+              return (
+                <button
+                  key={h.project_id}
+                  className="item pdf-row"
+                  onClick={() =>
+                    setPicking({ relPath: h.rel_path, filepath: h.filepath, sheets: h.sheets ?? [], selected: h.electrical_pages.map((p) => p.page_index) })
+                  }
+                  title="Check which sheets are counted"
+                >
+                  <span className="tender-icon"><FileText size={15} /></span>
+                  <span className="meta">
+                    <span className="title">{h.name}</span>
+                    <span className="sub">{h.electrical_pages.map((p) => p.title || `p.${p.page_number}`).join(" · ")}</span>
+                  </span>
+                  {h.sheets_confirmed ? (
+                    <span className="pill pill-ok" title="You checked these sheets"><Check size={11} /> {h.electrical_pages.length} sheets</span>
+                  ) : (
+                    <span className="badge-count">{h.electrical_pages.length} sheets</span>
+                  )}
+                  {maybe > 0 && !h.sheets_confirmed && <span className="pill pill-review" title="Sheets that might be electrical">{maybe} to check</span>}
+                  <PlotsBadge h={h} />
+                  <ChevronRight size={15} className="muted" />
+                </button>
+              );
+            })}
+            {houses.length === 0 && <p className="muted">No drawings with electrical sheets were found. Open a PDF under other documents to pick sheets by hand.</p>}
           </div>
           <div className={cx("callout", schedule && "ok")}>
             <FileText size={14} />
@@ -404,19 +433,59 @@ function RunPanel({ t, onRun, hasKey }: { t: Tender; onRun: (s: Partial<RunSetti
               }
             }} />
           </div>
-          {t.documents.length > 0 && (
+          {maybeDocs.length > 0 && (
+            <div className="callout">
+              <TriangleAlert size={14} style={{ color: "var(--review)" }} />
+              <span>
+                {maybeDocs.length} other PDF{maybeDocs.length === 1 ? " has" : "s have"} sheets that might be electrical. Open{" "}
+                {maybeDocs.length === 1 ? "it" : "them"} below to include any.
+              </span>
+            </div>
+          )}
+          {docs.length > 0 && (
             <>
               <button className="btn btn-quiet btn-sm" style={{ justifySelf: "start" }} onClick={() => setShowDocs(!showDocs)}>
-                {showDocs ? <ChevronDown size={14} /> : <ChevronRight size={14} />} Other documents ({t.documents.length})
+                {showDocs ? <ChevronDown size={14} /> : <ChevronRight size={14} />} Other documents ({docs.length})
               </button>
-              {showDocs && (
-                <ul className="doc-list">
-                  {t.documents.map((d) => (
-                    <li key={d.path} className="truncate muted">{d.path}</li>
-                  ))}
-                </ul>
+              {(showDocs || maybeDocs.length > 0) && (
+                <div className="list" style={{ padding: 0 }}>
+                  {docs
+                    .filter((d) => showDocs || (d.maybe ?? 0) > 0)
+                    .map((d) =>
+                      d.kind === "pdf" && d.sheets && d.filepath ? (
+                        <button
+                          key={d.path}
+                          className="item pdf-row"
+                          onClick={() => setPicking({ relPath: d.path, filepath: d.filepath!, sheets: d.sheets!, selected: [] })}
+                          title="Pick sheets from this PDF"
+                        >
+                          <span className="meta">
+                            <span className="title truncate">{d.path.split("/").pop()}</span>
+                            <span className="sub">{d.pages} pages · not counted</span>
+                          </span>
+                          {(d.maybe ?? 0) > 0 && <span className="pill pill-review">{d.maybe} to check</span>}
+                          <ChevronRight size={15} className="muted" />
+                        </button>
+                      ) : (
+                        <div key={d.path} className="item" style={{ cursor: "default" }}>
+                          <span className="meta"><span className="sub truncate">{d.path}</span></span>
+                        </div>
+                      ),
+                    )}
+                </div>
               )}
             </>
+          )}
+          {picking && (
+            <SheetPicker
+              tenderId={t.tender_id}
+              relPath={picking.relPath}
+              filepath={picking.filepath}
+              sheets={picking.sheets}
+              selected={picking.selected}
+              onClose={() => setPicking(null)}
+              onSaved={applyTender}
+            />
           )}
         </div>
 
@@ -476,7 +545,7 @@ function RunPanel({ t, onRun, hasKey }: { t: Tender; onRun: (s: Partial<RunSetti
           </div>
           <button
             className="btn btn-copper btn-lg"
-            disabled={!t.house_types.length}
+            disabled={!houses.length}
             onClick={() => onRun({ use_ai: useAI, ai_mode: aiMode === "auto" ? "auto" : "manual", quick, auto_high: high, ai_low: low, max_ai_marks: cap })}
           >
             <Play size={15} /> Run full takeoff

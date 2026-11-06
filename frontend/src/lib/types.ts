@@ -120,6 +120,15 @@ export type CanvasMode = "paper" | "blueprint";
 export const APPROVED: MarkerStatus[] = ["user_verified", "manual_added"];
 export const OPEN: MarkerStatus[] = ["needs_review", "ai_unverified"];
 
+export interface SheetInfo {
+  page_index: number;
+  page_number: number;
+  title: string;
+  verdict: "yes" | "maybe" | "no";
+  legend_hits: number;
+  reasons: string[];
+}
+
 export interface HouseType {
   project_id: string;
   name: string;
@@ -130,6 +139,8 @@ export interface HouseType {
   electrical_pages: { page_index: number; page_number: number; title: string }[];
   plots: number;
   plots_source?: { file?: string; matched?: string[]; manual?: boolean } | null;
+  sheets?: SheetInfo[];
+  sheets_confirmed?: boolean;
 }
 
 export interface AIRun {
@@ -184,7 +195,7 @@ export interface Tender {
   created_at: string;
   status: "uploaded" | "running" | "done" | "failed";
   house_types: HouseType[];
-  documents: { path: string; kind: string; pages?: number; error?: string }[];
+  documents: { path: string; kind: string; pages?: number; error?: string; filepath?: string; sheets?: SheetInfo[]; maybe?: number }[];
   progress: { stage: string; message: string; done: number; total: number; started_at?: number; ai_only?: boolean };
   schedule?: { file: string; sheet: string; total: number; plots: Record<string, number>; unmatched: Record<string, number> } | null;
   ai_runs?: AIRun[];

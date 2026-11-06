@@ -91,6 +91,19 @@ class PDFService:
                 page_type = "electrical"
                 title = "Electrical Layout"
             
+            # Evidence-based classification overrides the keyword rules above
+            try:
+                from app.services.sheet_classifier import classify_page
+                c = classify_page(page)
+                verdict = c["verdict"]
+                if c["title"]:
+                    title = c["title"] if verdict != "no" or page_type != "cover" else title
+                page_type = "electrical" if verdict == "yes" else ("electrical_maybe" if verdict == "maybe" else (page_type if page_type != "electrical" else "architectural"))
+                evidence = {"verdict": verdict, "legend_hits": c["legend_hits"], "reasons": c["reasons"]}
+            except Exception as e:  # never block inspection on the classifier
+                print(f"[sheet_classifier] page {idx + 1}: {e}")
+                evidence = None
+
             # If drawing_no found and not in title, append it
             display_label = f"P{idx + 1}: {title}"
             if drawing_no:
@@ -104,6 +117,7 @@ class PDFService:
                 "display_label": display_label,
                 "page_type": page_type,
                 "is_electrical": page_type == "electrical",
+                "evidence": evidence,
                 "pdf_width_pts": rect.width,
                 "pdf_height_pts": rect.height,
             })

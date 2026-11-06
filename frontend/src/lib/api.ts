@@ -202,6 +202,10 @@ export const api = {
     form.append("file", file, file.name);
     return request<Tender>(`/tenders/${q(id)}/schedule`, { method: "POST", body: form }, "Couldn't read that schedule");
   },
+  setSheets: (id: string, rel_path: string, page_indexes: number[]) =>
+    postJson<Tender>(`/tenders/${q(id)}/sheets`, { rel_path, page_indexes }, "Couldn't save the sheet choice"),
+  pagePreviewUrl: (filepath: string, page: number) =>
+    `${API_BASE}/projects/page-image?filepath=${q(filepath)}&page_index=${page}&dpi=110`,
   costs: () => request<CostSummary>("/tenders/costs/summary", undefined, "Couldn't load AI spend"),
   setPlots: (id: string, project_id: string, plots: number) =>
     postJson<Tender>(`/tenders/${q(id)}/plots`, { project_id, plots }, "Couldn't save plots"),

@@ -151,6 +151,8 @@ Keyboard: A approve · X reject · J/K next/prev · ⇧J/⇧K next/prev sheet ·
 8. **AI on demand**: `ai_mode` "manual" (default) skips AI in the run. `POST /ai-estimate` returns marks / calls / estimated cost; `POST /ai-run` runs it in the background and merges results into the saved state without overwriting review decisions made meanwhile. Marks AI has seen are never re-sent.
 9. **Cost ledger** (`services/cost_ledger.py`, `data/ai_costs.json`): every OpenAI call records real token usage priced from `PRICES`; tagged per tender. `GET /api/tenders/costs/summary`. Estimates use the average of the last 50 real calls once 3+ exist (default $0.0175/call ≈ 4.2k in + 0.7k out on gpt-4o).
 
+10. **Which sheets are electrical** (`services/sheet_classifier.py`, used by `PDFService.inspect_pdf` and the pipeline): reads the real drawing title from the title block (right-hand column / bottom strip, largest title-like line) and counts how many library symbol descriptions are printed on the sheet (an electrical plan carries its legend: Avebury GF/FF 27, kitchen 8; architectural sheets 0; bathroom/WC layouts 3-4). Verdict "yes" if the title says electrical/lighting/power/M&E/services or ≥8 legend descriptions; "maybe" (flagged, not counted) for 3-7 without an electrical title; cover/drawing-register and legend-only sheets are "no". On Avebury all 28 pages classify correctly (the old keyword rules wrongly included the plain roof plan). Users confirm per PDF in the sheet picker (`POST /api/tenders/<id>/sheets`); picking sheets in a "document" PDF promotes it to a house type, clearing all demotes it.
+
 Timing: ~1.4 s per symbol per sheet at 3 scales on 4 cores (~2 min for a 5-sheet house type); `quick` uses one scale (~3× faster).
 Demo walkthrough: `DEMO_SCRIPT.md`.
 
