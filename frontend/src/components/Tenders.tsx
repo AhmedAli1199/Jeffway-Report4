@@ -734,7 +734,7 @@ function Overview({
     const legends = new Map<string, { label: string; color: string; stage: string }>();
     for (const h of marks) for (const l of h.legends) legends.set(l.legend_id, { label: l.label, color: l.color, stage: l.fix_stage });
     const matrix = new Map<string, Map<string, number>>();
-    let found = 0, toReview = 0, approved = 0;
+    let found = 0, toReview = 0, approved = 0, aiConfirmed = 0;
     const perHouse = new Map<string, { found: number; review: number; approved: number; pages: Map<number, number> }>();
     for (const h of marks) {
       const ph = { found: 0, review: 0, approved: 0, pages: new Map<number, number>() };
@@ -749,6 +749,7 @@ function Overview({
         } else {
           toReview++;
           ph.review++;
+          if (m.status === "ai_verified") aiConfirmed++;
         }
         const row = matrix.get(m.legend_id) ?? new Map<string, number>();
         row.set(h.project_id, (row.get(h.project_id) ?? 0) + 1);
@@ -759,7 +760,7 @@ function Overview({
     const rows = [...matrix.entries()]
       .map(([lid, row]) => ({ lid, row, total: [...row.values()].reduce((a, b) => a + b, 0), ...(legends.get(lid) ?? { label: lid, color: "#999", stage: "" }) }))
       .sort((a, b) => b.total - a.total);
-    return { rows, found, toReview, approved, perHouse };
+    return { rows, found, toReview, approved, aiConfirmed, perHouse };
   }, [marks, threshold]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const sheets = marks.reduce((n, h) => n + h.electrical_pages.length, 0);
@@ -833,7 +834,13 @@ function Overview({
                 : "AI not run yet · see below"}
           </span>
         </div>
-        <div className="tile accent"><b>{data.toReview}</b><span>Waiting for you · {data.approved} approved</span></div>
+        <div className="tile accent">
+          <b>{data.toReview}</b>
+          <span>
+            Waiting for you · {data.approved} approved
+            {data.aiConfirmed > 0 && <><br />{data.aiConfirmed} AI-confirmed · {data.toReview - data.aiConfirmed} not checked by AI</>}
+          </span>
+        </div>
       </div>
       {ai?.error && (
         <div className="callout" style={{ color: "var(--reject)" }}>

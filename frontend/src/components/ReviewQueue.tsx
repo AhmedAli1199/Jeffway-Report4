@@ -3,8 +3,28 @@ import { ArrowLeft, Check, ChevronLeft, ChevronRight, CircleCheck, LoaderCircle,
 import { api } from "../lib/api";
 import { useToast } from "../lib/toast";
 import type { Marker, Tender, TenderHouseMarks, ThemePref } from "../lib/types";
-import { cx, isApproved } from "../lib/util";
+import { cx, isApproved, store } from "../lib/util";
 import { PageHeader } from "./Tenders";
+
+export type QueueView = "left" | "unchecked" | "ai" | "all";
+
+const VIEWS: { id: QueueView; label: string; hint: string }[] = [
+  { id: "unchecked", label: "Not checked by AI", hint: "Unreviewed marks the AI hasn't confirmed: the ones that need a person" },
+  { id: "ai", label: "AI-confirmed", hint: "Marks the AI kept: spot-check them or approve them all at once" },
+  { id: "left", label: "Everything left", hint: "Every unreviewed mark at or above the score threshold" },
+  { id: "all", label: "All marks", hint: "Every mark at any score, including ones already approved" },
+];
+
+/** Which marks each view shows. */
+function inView(view: QueueView, m: Marker, threshold: number): boolean {
+  const done = isApproved(m);
+  if (view === "all") return true;
+  if (done) return false;
+  if (view === "ai") return m.status === "ai_verified";
+  if (m.confidence_score < threshold) return false;
+  if (view === "unchecked") return m.status !== "ai_verified";
+  return true;
+}
 
 interface Item {
   m: Marker;
@@ -36,6 +56,12 @@ export function ReviewQueue({
   const [history, setHistory] = useState<Done[]>([]);
   const [confirmAll, setConfirmAll] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [view, setViewState] = useState<QueueView>(() => store.get<QueueView>("pl.queueView", "left"));
+  const setView = (v: QueueView) => {
+    setViewState(v);
+    store.set("pl.queueView", v);
+    setPos(0);
+  };
 
   // Decisions sent but not yet saved: applied on top of any refresh so a mark never pops back
   const pending = useRef<Map<string, "approve" | "reject">>(new Map());
@@ -88,7 +114,7 @@ export function ReviewQueue({
       if (house && h.project_id !== house) continue;
       const pageOrder = new Map(h.electrical_pages.map((p, i) => [p.page_index, i]));
       const ms = h.markers
-        .filter((m) => !isApproved(m) && m.confidence_score >= threshold && (!legend || m.legend_id === legend))
+        .filter((m) => inView(view, m, threshold) && (!legend || m.legend_id === legend))
         .sort(
           (a, b) =>
             (pageOrder.get(a.page_index) ?? 99) - (pageOrder.get(b.page_index) ?? 99) ||
@@ -99,7 +125,20 @@ export function ReviewQueue({
       for (const m of ms) out.push({ m, h });
     }
     return out;
-  }, [houses, house, legend, threshold, labels]);
+  }, [houses, house, legend, threshold, labels, view]);
+
+  // How many marks each view holds, for the current house type / symbol filter
+  const viewCounts = useMemo(() => {
+    const c: Record<QueueView, number> = { left: 0, unchecked: 0, ai: 0, all: 0 };
+    for (const h of houses ?? []) {
+      if (house && h.project_id !== house) continue;
+      for (const m of h.markers) {
+        if (legend && m.legend_id !== legend) continue;
+        for (const v of VIEWS) if (inView(v.id, m, threshold)) c[v.id]++;
+      }
+    }
+    return c;
+  }, [houses, house, legend, threshold]);
 
   const cur = queue[Math.min(pos, queue.length - 1)] as Item | undefined;
   useEffect(() => {
@@ -166,11 +205,21 @@ export function ReviewQueue({
     lastRestored.current = null;
   }, [queue]);
 
-  const approveAll = async () => {
+  const aiIds = () => {
+    const out: Item[] = [];
+    for (const h of houses ?? []) {
+      if (house && h.project_id !== house) continue;
+      for (const m of h.markers) if (inView("ai", m, threshold) && (!legend || m.legend_id === legend)) out.push({ m, h });
+    }
+    return out;
+  };
+  const approveAll = () => approveIds(queue.filter((it) => !isApproved(it.m)));
+  const approveIds = async (items: Item[]) => {
+    if (!items.length) return;
     setBusy(true);
     try {
-      const ids = queue.map((it) => it.m.marker_id);
-      const pids = [...new Set(queue.map((it) => it.h.project_id))];
+      const ids = items.map((it) => it.m.marker_id);
+      const pids = [...new Set(items.map((it) => it.h.project_id))];
       const r = await api.approveMany(id, pids, ids);
       const set = new Set(ids);
       setHouses((hs) => hs?.map((h) => ({ ...h, markers: h.markers.map((m) => (set.has(m.marker_id) ? { ...m, status: "user_verified" } : m)) })) ?? null);
@@ -210,9 +259,9 @@ export function ReviewQueue({
   const meta = (cur?.m.metadata ?? {}) as { ai_audit_reason?: string; first_pass_score?: number };
   const legendsInView = useMemo(() => {
     const ids = new Set<string>();
-    for (const h of houses ?? []) if (!house || h.project_id === house) for (const m of h.markers) if (!isApproved(m) && m.confidence_score >= threshold) ids.add(m.legend_id);
+    for (const h of houses ?? []) if (!house || h.project_id === house) for (const m of h.markers) if (inView(view, m, threshold)) ids.add(m.legend_id);
     return [...ids].sort((a, b) => (labels.get(a)?.label ?? "").localeCompare(labels.get(b)?.label ?? ""));
-  }, [houses, house, threshold, labels]);
+  }, [houses, house, threshold, labels, view]);
 
   return (
     <div className="shell">
@@ -243,6 +292,27 @@ export function ReviewQueue({
             </div>
           </div>
 
+          <div className="queue-views" role="tablist" aria-label="Which marks to review">
+            {VIEWS.map((v) => (
+              <button key={v.id} role="tab" aria-selected={view === v.id} className={cx("qv", view === v.id && "on")} onClick={() => setView(v.id)} title={v.hint}>
+                <span>{v.label}</span>
+                <b className="mono">{viewCounts[v.id].toLocaleString()}</b>
+              </button>
+            ))}
+          </div>
+          {view !== "ai" && viewCounts.ai > 0 && (
+            <div className="queue-tip">
+              <Sparkles size={14} style={{ color: "var(--ai)", flex: "none" }} />
+              <span className="grow">
+                The AI has confirmed <b>{viewCounts.ai.toLocaleString()}</b> marks. Approve them in one go, or spot-check them first,
+                then review the <b>{viewCounts.unchecked.toLocaleString()}</b> it hasn't checked.
+              </span>
+              <button className="btn btn-ghost btn-sm" onClick={() => setView("ai")}>Spot-check</button>
+              <button className="btn btn-ok btn-sm" disabled={busy} onClick={() => approveIds(aiIds())}>
+                <CheckCheck size={13} /> Approve all {viewCounts.ai.toLocaleString()}
+              </button>
+            </div>
+          )}
           {tender?.status === "running" && (
             <div className="queue-live">
               <span className="live-dot" aria-hidden="true" />
@@ -270,7 +340,7 @@ export function ReviewQueue({
               {queue.length > 0 &&
                 (confirmAll ? (
                   <span className="row">
-                    <span className="muted">Approve all {queue.length} in this view?</span>
+                    <span className="muted">Approve all {queue.filter((it) => !isApproved(it.m)).length} in this view?</span>
                     <button className="btn btn-ok btn-sm" disabled={busy} onClick={approveAll}>
                       {busy ? <LoaderCircle size={13} className="spin" /> : <Check size={13} />} Yes, approve
                     </button>
@@ -289,7 +359,15 @@ export function ReviewQueue({
           ) : !cur ? (
             <div className="card empty" style={{ padding: 56 }}>
               {tender?.status === "running" ? <LoaderCircle size={28} className="spin muted" /> : <CircleCheck size={30} style={{ color: "var(--ok)" }} />}
-              <h3>{tender?.status === "running" ? "Waiting for the next sheet…" : "All done in this view"}</h3>
+              <h3>
+                {tender?.status === "running"
+                  ? "Waiting for the next sheet…"
+                  : view === "ai"
+                    ? "No AI-confirmed marks left"
+                    : view === "unchecked"
+                      ? "Nothing left that the AI hasn't checked"
+                      : "All done in this view"}
+              </h3>
               <p>
                 Nothing left above {Math.round(threshold * 100)}%
                 {house || legend ? " for this filter" : ""}. Lower the slider to check weaker matches, or go back to the overview.
@@ -311,7 +389,9 @@ export function ReviewQueue({
                 </div>
                 <div className="row">
                   <span className="mono" style={{ fontSize: 22, fontWeight: 600 }}>{Math.round(cur.m.confidence_score * 100)}%</span>
-                  {cur.m.status === "ai_verified" ? (
+                  {isApproved(cur.m) ? (
+                    <span className="pill pill-ok">Approved</span>
+                  ) : cur.m.status === "ai_verified" ? (
                     <span className="pill pill-ai">AI confirmed</span>
                   ) : cur.m.confidence_score >= (tender?.settings?.auto_high ?? 0.85) ? (
                     <span className="pill pill-ok">Strong match</span>
