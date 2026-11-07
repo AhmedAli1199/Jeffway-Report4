@@ -1,3 +1,4 @@
+import re
 import io
 from pathlib import Path
 from typing import Any, Dict, List, Optional
@@ -244,6 +245,9 @@ def export_tender(tender_id: str, r: ExportRequest):
             "plots": int(ht.get("plots") or 1),
             "plot_source": f"schedule: {src.get('file')}" if src.get("file") else ("set by hand" if src.get("manual") else "default (1)"),
             "markers": [m for m in st.get("markers", []) if keep(m)],
+            # for the pricing rules: a house with a roof / loft plan has a loft light spur
+            "house": {"loft": any(re.search(r"(?i)roof|loft", p.get("title") or "") for p in ht.get("electrical_pages", [])),
+                      "cylinder": True, "dwelling": True},
         })
     basis = (
         "Counted = approved marks only." if r.mode == "approved"

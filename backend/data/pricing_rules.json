@@ -1,0 +1,93 @@
+{
+  "not_priced": {
+    "sym_extract_fan_continuous": "Extract fans: Jeffway prices fans (row 92) only on the EMA and apartment tabs, never on houses",
+    "sym_blanking_plate": "Blanking plates: the Twin Blank row is empty on all 26 tabs"
+  },
+  "adds": {
+    "sym_media_plate": [
+      [
+        21,
+        2,
+        "The media plate's legend entry includes 'Double sockets (2)'"
+      ]
+    ]
+  },
+  "price_as": {
+    "sym_cooker_outlet": [
+      19,
+      "Oven / hob flex outlet plates on the kitchen layout are priced as unswitched single sockets"
+    ]
+  },
+  "spur_by_place": {
+    "symbol": "sym_fused_spur_extract",
+    "places": [
+      [
+        "\\bA\\s*/\\s*C\\b|airing|cylinder|hot water",
+        33,
+        "Spur in the airing cupboard: the cylinder / water heater"
+      ],
+      [
+        "\\bloft\\b",
+        34,
+        "Spur by the loft hatch: the loft light"
+      ]
+    ],
+    "first_row": 30,
+    "first_why": "First spur for the extract fans: Switched Fused Spur Extractor Fan",
+    "rest_row": 32,
+    "rest_why": "Further extract-fan spurs: 20A Double Pole Switch",
+    "reach_px": 160,
+    "fallback": [
+      [
+        34,
+        "loft",
+        "One spur per house with a loft is the loft light (the hatch is rarely labelled)"
+      ],
+      [
+        33,
+        "cylinder",
+        "One spur per heat-pump house is the hot-water cylinder"
+      ]
+    ]
+  },
+  "coax_satellite": {
+    "symbol": "sym_tv_coaxial",
+    "near_symbol": "sym_media_plate",
+    "near_px": 260,
+    "text": "\\bSKY\\b|\\bSAT\\b|satellite|coiled",
+    "why": "Coax at the media plate / Sky entry is the satellite feed, part of the media plate, not a TV point"
+  },
+  "one_per_house": {
+    "why": "Jeffway prices exactly one on every house tab; the drawing doesn't reliably show it",
+    "rows": {
+      "10": "Split load heat pump board (the consumer unit)",
+      "37": "45A cooker control unit",
+      "38": "45A cooker outlet"
+    }
+  },
+  "per_house_kit": {
+    "enabled": false,
+    "why": "Standard items every house gets that aren't drawn (most common value on Jeffway's 26 tabs)",
+    "rows": {
+      "12": 1,
+      "13": 4,
+      "14": 1,
+      "15": 1,
+      "16": 4,
+      "17": 4,
+      "29": 1,
+      "31": 1,
+      "43": 1,
+      "44": 1,
+      "45": 1,
+      "46": 1,
+      "75": 2,
+      "76": 1,
+      "88": 4,
+      "89": 1,
+      "90": 0.3,
+      "91": 0.1,
+      "107": 0.15
+    }
+  }
+}

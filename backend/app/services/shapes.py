@@ -203,7 +203,14 @@ class ShapeKnowledge:
     def known(self) -> Set[Pattern]:
         return {p for p in set(self.seen) | set(self.legend) if self.owners(p)}
 
+    @staticmethod
+    def specific(pat: Pattern) -> bool:
+        """Two straight strokes match half the drawing; a pattern needs 3+ strokes or a curve to mean anything."""
+        return sum(n for _, n in pat) >= 3 or any("c" in k or "qu" in k or "re" in k for k, _ in pat)
+
     def owners(self, pat: Pattern) -> Set[str]:
+        if not self.specific(pat):
+            return set()
         out = set(self.legend.get(pat, set()))
         out |= {s for s, n in self.seen.get(pat, {}).items() if n >= MIN_SEEN}
         return out
@@ -223,8 +230,9 @@ class ShapeKnowledge:
             if not own:
                 continue
             if g in own:
-                if meta.get("modifier_check") and meta["modifier_check"].get("extra") and not meta.get("relabelled_from"):
-                    continue  # a code beside it says it's another item the library doesn't have: leave it to a person
+                mc = meta.get("modifier_check") or {}
+                if (mc.get("extra") or mc.get("missing")) and not meta.get("relabelled_from"):
+                    continue  # the code beside it says it's another variant: leave it to the code check / a person
                 verdict, note = "confirmed", "Drawn with exactly the strokes of this symbol's CAD block"
             elif len(own) == 1 and not meta.get("modifier_check"):
                 verdict, note = "moved", "Drawn with exactly the strokes of another symbol's CAD block"

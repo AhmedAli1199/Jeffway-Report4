@@ -223,7 +223,7 @@ def describe_for_ai(mods: Dict[str, Any], legend_id: str) -> str:
 
 
 def apply_to_sheet(pdf: Path, page_index: int, marks: List[Dict[str, Any]], library_ids: Set[str],
-                   only: Optional[List[Dict[str, Any]]] = None) -> int:
+                   only: Optional[List[Dict[str, Any]]] = None, relabel_only: bool = False) -> int:
     """First-pass check. A mark carrying another item's code is moved to that symbol if it's in the
     library; otherwise it's marked down so it isn't counted without a person looking. Returns changes."""
     try:
@@ -240,6 +240,8 @@ def apply_to_sheet(pdf: Path, page_index: int, marks: List[Dict[str, Any]], libr
         res = check(m, words, mods, owner)
         if not res:
             continue
+        if relabel_only and not (res["extra"] and res["relabel_to"] and res["relabel_to"] in library_ids and res["relabel_to"] != m["legend_id"]):
+            continue
         meta = dict(m.get("metadata") or {})
         meta["modifier_check"] = res
         if res["extra"] and res["relabel_to"] and res["relabel_to"] in library_ids:
@@ -253,3 +255,33 @@ def apply_to_sheet(pdf: Path, page_index: int, marks: List[Dict[str, Any]], libr
         m["metadata"] = meta
         changed += 1
     return changed
+
+
+def confirm_by_code(pdf: Path, page_index: int, marks: List[Dict[str, Any]], auto_high: float, low: float = 0.55) -> int:
+    """A weak mark with exactly its own legend code printed beside it (BA, CL, R, 2, 3 ...) is that item:
+    the code is CAD text, not a picture, so it doesn't depend on the image score. Returns marks confirmed."""
+    try:
+        words = sheet_words(str(pdf), page_index)
+    except Exception:
+        return 0
+    mods = legend_modifiers(words)
+    known = set(mods["codes"])
+    if not known:
+        return 0
+    n = 0
+    for m in marks:
+        own = mods["by_symbol"].get(m["legend_id"])
+        if not own or not (low <= m["confidence_score"] < auto_high) or m.get("status") == "possible_missed":
+            continue
+        if (m.get("metadata") or {}).get("modifier_check", {}).get("extra"):
+            continue
+        near = codes_near(words, m, known)
+        if own <= near and not (near - own):
+            meta = dict(m.get("metadata") or {})
+            meta["first_pass_score_before_code"] = m["confidence_score"]
+            meta["code_confirmed"] = {"codes": sorted(own), "note": f'"{", ".join(sorted(own))}" printed beside it, the code this symbol carries on the legend'}
+            m["metadata"] = meta
+            m["confidence_score"] = round(auto_high, 3)
+            m["status"] = "ai_unverified"
+            n += 1
+    return n

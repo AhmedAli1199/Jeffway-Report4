@@ -1,4 +1,4 @@
-"""
+r"""
 Accuracy check: Plotline's automatic count vs a finished Jeffway workbook, house type by house type.
 
     cd backend
@@ -20,6 +20,7 @@ import collections
 import copy
 import hashlib
 import json
+import re
 import sys
 from pathlib import Path
 
@@ -31,6 +32,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from app.services import pipeline_service as ps  # noqa: E402
 from app.services.pdf_service import PDFService  # noqa: E402
 from app.services.sheet_checks import TenderChecks  # noqa: E402
+from app.services import pricing_rules  # noqa: E402
 from app.vision.template_matcher import GeometricVisionMatcher  # noqa: E402
 
 COUNTED_AT = 0.80
@@ -110,22 +112,27 @@ def main() -> None:
         if not a.matcher_only:
             checks.finish_house(sheets)
 
-        counted = collections.Counter()
-        to_ai = 0
+        kept, to_ai = [], 0
         for sh in sheets:
             for m in sh["marks"]:
                 if m.get("status") == "possible_missed":
                     continue
                 if m["confidence_score"] >= COUNTED_AT:
-                    counted[m["legend_id"]] += 1
+                    kept.append(m)
                 elif m["confidence_score"] >= 0.6 and m.get("status") in ("needs_review", "ai_unverified"):
                     to_ai += 1
+        # the same quantities the workbook export writes (services/pricing_rules.py)
+        loft = any(re.search(r"(?i)roof|loft", p.get("title") or "") for p in pages)
+        if a.matcher_only:
+            per_row = collections.Counter(int(lib[m["legend_id"]]["sheet_row"]) for m in kept if lib[m["legend_id"]].get("sheet_row"))
+        else:
+            per_row, _, _ = pricing_rules.workbook_rows(kept, lib, house={"loft": loft, "cylinder": True, "dwelling": True})
         ws = wb[name]
         err = over = under = exact = n = truth = 0
         print(f"\n== {name}  (sheets: {', '.join(str(p['page_number']) + ' ' + (p.get('title') or '') for p in pages)})")
-        for r, lids in sorted(rows.items()):
+        for r in sorted(set(rows) | {30, 32, 33, 34}):
             t = int(ws.cell(r, 1).value or 0)
-            c = sum(counted[l] for l in lids)
+            c = int(per_row.get(r, 0))
             if not (t or c):
                 continue
             n += 1

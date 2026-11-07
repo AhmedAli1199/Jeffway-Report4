@@ -96,21 +96,15 @@ class MasterExcelService:
         summary = []
         for h in houses:
             tab = cls._match_tab(h["name"], tabs)
-            counts: Dict[int, int] = {}
+            from app.services import pricing_rules
+            counts, rule_notes, unmapped = pricing_rules.workbook_rows(h.get("markers", []), by_id, house=h.get("house"))
             per_symbol: Dict[str, Dict[str, Any]] = {}
-            unmapped: Dict[str, int] = {}
             for m in h.get("markers", []):
                 lid = m.get("legend_id") or m.get("symbol_id") or ""
-                entry = by_id.get(lid) or by_label.get(str(m.get("label") or "").lower())
+                entry = by_id.get(lid)
                 if not entry or not entry.get("sheet_row"):
-                    unmapped[lid] = unmapped.get(lid, 0) + 1
                     continue
-                row = int(entry["sheet_row"])
-                ov = entry.get("room_override")
-                if ov and any(z in str(m.get("room") or "").lower() for z in ov.get("zones", [])):
-                    row = int(ov.get("override_row", row))
-                counts[row] = counts.get(row, 0) + 1
-                ps = per_symbol.setdefault(lid, {"label": entry.get("cad_label") or lid, "row": row, "n": 0, "approved": 0, "ai": 0})
+                ps = per_symbol.setdefault(lid, {"label": entry.get("cad_label") or lid, "row": int(entry["sheet_row"]), "n": 0, "approved": 0, "ai": 0})
                 ps["n"] += 1
                 if m.get("status") in ("user_verified", "manual_added"):
                     ps["approved"] += 1
@@ -139,6 +133,9 @@ class MasterExcelService:
             for row, (n, why) in linked.items():
                 desc = wb[tab].cell(row, 4).value if tab else ""
                 audit_rows.append([h["name"], tab or "NOT IN WORKBOOK", f"(linked) {why}", row, cls._resolve_desc(wb, desc), n, "", "", ""])
+            for row, q, why in sorted(rule_notes, key=lambda x: x[0]):
+                desc = wb[tab].cell(row, 4).value if (tab and row) else "not priced"
+                audit_rows.append([h["name"], tab or "NOT IN WORKBOOK", f"(pricing rule) {why}", row or "-", cls._resolve_desc(wb, desc) if row else desc, q, "", "", ""])
 
         # 2. Audit sheet
         if "Plotline takeoff" in wb.sheetnames:
@@ -148,7 +145,8 @@ class MasterExcelService:
         au["A2"] = f"Generated {datetime.now().strftime('%Y-%m-%d %H:%M')}. {basis}"
         au["A3"] = (f"Every typed quantity and plot count on the {len(tabs)} house-type tabs was cleared first "
                     f"({cleared} cells); only the numbers below were filled in. Prices, labour rates and formulas are unchanged. "
-                    "Items that can't be read off the drawings (RCBOs, modules, junction boxes, sleeving, isolators, etc.) are left for the estimator.")
+                    "Items that can't be read off the drawings (RCBOs, modules, junction boxes, sleeving, isolators, etc.) are left for the estimator, "
+                    "unless the per-house kit is switched on in data/pricing_rules.json. Lines marked (pricing rule) come from the rules in that file.")
         au["A5"] = "House type"; au["B5"] = "Workbook tab"; au["C5"] = "Plots"; au["D5"] = "Plots from"; au["E5"] = "Points filled"; au["F5"] = "Symbols with no workbook row"
         r = 6
         for sm in summary:

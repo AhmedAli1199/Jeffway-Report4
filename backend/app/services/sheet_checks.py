@@ -17,7 +17,7 @@ import uuid
 from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional
 
-from app.services import cad_layers, modifiers, rooms, shapes
+from app.services import cad_layers, modifiers, pricing_rules, rooms, shapes
 
 GANG_REACH = 1.6  # switch centres closer than this many symbol widths share one plate
 
@@ -167,6 +167,7 @@ class TenderChecks:
         for m in marks:
             m.setdefault("marker_id", f"mk_{uuid.uuid4().hex[:8]}")
         st["code"] += modifiers.apply_to_sheet(pdf, page_index, marks, self.library_ids)
+        st["code_confirmed"] = st.get("code_confirmed", 0) + modifiers.confirm_by_code(pdf, page_index, marks, auto_high)
         paths = cad_layers.sheet_paths(str(pdf), page_index)
         words = modifiers.sheet_words(str(pdf), page_index)
         if cad_layers.has_layers(paths):
@@ -183,6 +184,11 @@ class TenderChecks:
             r = self.shapes.apply(marks, paths, auto_high)
             st["shape_confirmed"] += r["confirmed"]
             st["shape_moved"] += r["moved"]
+            # marks confirmed by their strokes are now confident: a code beside them (R = smoke test button) moves them
+            confirmed = [m for m in marks if (m.get("metadata") or {}).get("shape_check")]
+            if confirmed:
+                st["code_after_shape"] = st.get("code_after_shape", 0) + modifiers.apply_to_sheet(
+                    pdf, page_index, marks, self.library_ids, only=confirmed, relabel_only=True)
             found = [m for m in self.shapes.find_missed(marks, paths, auto_high) if not_legend(m)]
             for m in found:
                 m["marker_id"] = f"mk_{uuid.uuid4().hex[:8]}"
@@ -202,6 +208,10 @@ class TenderChecks:
             st["possible_missed"] += len(gaps)
         st["duplicates"] = st.get("duplicates", 0) + drop_same_spot(marks, self.groups)
         st["gangs"] += gang_switches(marks, self.switches)
+        try:  # pricing context: what a spur feeds, coax at the media plate (services/pricing_rules.py)
+            st["price_context"] = st.get("price_context", 0) + pricing_rules.mark_context(marks, words)
+        except Exception as e:
+            print(f"[checks] pricing context skipped: {e}")
         r = rooms.apply(str(pdf), page_index, marks, self.library_ids)
         st["rooms"] += r["rooms"]
         st["room_rule"] += r["rule"]
