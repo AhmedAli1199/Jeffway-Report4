@@ -177,3 +177,49 @@ def apply(pdf: str, page_index: int, marks: List[Dict[str, Any]], library_ids=No
                 m["legend_id"] = target
                 stats["rule"] += 1
     return stats
+
+
+SOLID_WALL = re.compile(r"WALL|PLASTER|PARTITION", re.I)
+
+
+@lru_cache(maxsize=16)
+def wall_mask(pdf: str, page_index: int, dpi: int = 200) -> Optional[np.ndarray]:
+    """The wall faces only (no doors or windows), as thin lines: for telling which side of a wall a point is on."""
+    k = dpi / 72.0
+    with fitz.open(pdf) as doc:
+        page = doc[page_index]
+        rot = page.rotation_matrix
+        W, H = int(page.rect.width * k) + 1, int(page.rect.height * k) + 1
+        mask = np.zeros((H, W), np.uint8)
+        n = 0
+        for d in page.get_drawings():
+            if not SOLID_WALL.search(d.get("layer") or ""):
+                continue
+            for it in d["items"]:
+                if it[0] == "l":
+                    pts = [it[1], it[2]]
+                elif it[0] == "re":
+                    r = it[1]
+                    pts = [r.tl, r.tr, r.br, r.bl, r.tl]
+                elif it[0] == "qu":
+                    q = it[1]
+                    pts = [q.ul, q.ur, q.lr, q.ll, q.ul]
+                else:
+                    continue
+                pts = [(int((p * rot).x * k), int((p * rot).y * k)) for p in pts]
+                for a, b in zip(pts, pts[1:]):
+                    cv2.line(mask, a, b, 255, 2)
+                    n += 1
+    return mask if n >= 50 else None
+
+
+def wall_between(mask: Optional[np.ndarray], a: Tuple[float, float], b: Tuple[float, float]) -> Optional[bool]:
+    """Does a wall face lie between two points? None when the sheet has no wall layers."""
+    if mask is None:
+        return None
+    h, w = mask.shape
+    for t in np.linspace(0.15, 0.85, 15):
+        x, y = int(a[0] + (b[0] - a[0]) * t), int(a[1] + (b[1] - a[1]) * t)
+        if 0 <= x < w and 0 <= y < h and mask[y, x]:
+            return True
+    return False

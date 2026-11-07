@@ -22,22 +22,42 @@ from app.services import cad_layers, modifiers, pricing_rules, rooms, shapes
 GANG_REACH = 1.6  # switch centres closer than this many symbol widths share one plate
 
 
+import os
+
+# How switches drawn together become plates (see gang_switches). "same_side" is the rule Jeffway's
+# workbook supports; the others are kept so the accuracy harness can compare them.
+GANG_MODE = os.getenv("PLOTLINE_GANG_MODE", "same_side")
+
+
 def _switch_family(symbols: List[Dict[str, Any]], legend_of: Callable) -> Dict[str, Any]:
-    fam, two = set(), None
+    fam, two, inter = set(), None, set()
     for s in symbols:
         lid, label = legend_of(s)["legend_id"], (legend_of(s)["label"] or "").lower()
         if re.search(r"\bgang\b", label) and "switch" in label and not re.search(r"grid|fused|spur|isolat|cooker|dimmer", label):
             fam.add(lid)
             if re.search(r"\b2 ?gang\b", label):
                 two = lid
-    return {"family": fam, "two_gang": two}
+            if re.search(r"3 ?way|intermediate", label):
+                inter.add(lid)
+    return {"family": fam, "two_gang": two, "intermediate": inter}
 
 
-def gang_switches(marks: List[Dict[str, Any]], family: Dict[str, Any], min_score: float = 0.7) -> int:
-    """Merge pairs of touching switch marks into one 2-gang plate. Returns plates made."""
+def gang_switches(marks: List[Dict[str, Any]], family: Dict[str, Any], min_score: float = 0.7,
+                  pdf: Optional[Path] = None, page_index: Optional[int] = None, mode: Optional[str] = None) -> int:
+    """Two switch symbols drawn touching on the SAME side of a wall are one 2-gang plate (Jeffway's 2 Gang 2 Way),
+    whatever codes they carry. Back to back on the two faces of one wall they are two plates in two rooms.
+    Modes for comparison: "any" (touching is enough), "same_side", "*_no_int" (never gang an intermediate), "off".
+    Returns plates made."""
+    mode = mode or GANG_MODE
     two = family["two_gang"]
-    if not two:
+    if not two or mode == "off":
         return 0
+    mask = None
+    if mode != "any" and pdf is not None and page_index is not None:
+        try:
+            mask = rooms.wall_mask(str(pdf), page_index)
+        except Exception:
+            mask = None
     sw = [m for m in marks if m["legend_id"] in family["family"] and m["confidence_score"] >= min_score
           and m.get("status") != "possible_missed"]
     sw.sort(key=lambda m: -m["confidence_score"])
@@ -45,21 +65,27 @@ def gang_switches(marks: List[Dict[str, Any]], family: Dict[str, Any], min_score
     for i, a in enumerate(sw):
         if id(a) in used:
             continue
+        if mode.endswith("no_int") and a["legend_id"] in family["intermediate"]:
+            continue
         size = max(a["width"], a["height"])
-        ax, ay = a["x"] + a["width"] / 2, a["y"] + a["height"] / 2
+        ac = (a["x"] + a["width"] / 2, a["y"] + a["height"] / 2)
         best, best_d = None, GANG_REACH * size
         for b in sw[i + 1:]:
-            if id(b) in used:
+            if id(b) in used or (mode.endswith("no_int") and b["legend_id"] in family["intermediate"]):
                 continue
-            d = ((b["x"] + b["width"] / 2 - ax) ** 2 + (b["y"] + b["height"] / 2 - ay) ** 2) ** 0.5
-            if d < best_d:
-                best, best_d = b, d
+            bc = (b["x"] + b["width"] / 2, b["y"] + b["height"] / 2)
+            d = ((bc[0] - ac[0]) ** 2 + (bc[1] - ac[1]) ** 2) ** 0.5
+            if d >= best_d:
+                continue
+            if mode.startswith("same_side") and rooms.wall_between(mask, ac, bc):
+                continue  # back to back on the two faces of a wall
+            best, best_d = b, d
         if best is None:
             continue
         used |= {id(a), id(best)}
         meta = dict(a.get("metadata") or {})
         meta["gang"] = {"from": [a["legend_id"], best["legend_id"]], "scores": [a["confidence_score"], best["confidence_score"]],
-                        "note": "Two switches drawn side by side: one 2-gang plate"}
+                        "note": "Two switches drawn side by side on the same side of the wall: one 2-gang plate"}
         x0, y0 = min(a["x"], best["x"]), min(a["y"], best["y"])
         x1 = max(a["x"] + a["width"], best["x"] + best["width"])
         y1 = max(a["y"] + a["height"], best["y"] + best["height"])
@@ -207,7 +233,7 @@ class TenderChecks:
             marks.extend(gaps)
             st["possible_missed"] += len(gaps)
         st["duplicates"] = st.get("duplicates", 0) + drop_same_spot(marks, self.groups)
-        st["gangs"] += gang_switches(marks, self.switches)
+        st["gangs"] += gang_switches(marks, self.switches, pdf=pdf, page_index=page_index)
         try:  # pricing context: what a spur feeds, coax at the media plate (services/pricing_rules.py)
             st["price_context"] = st.get("price_context", 0) + pricing_rules.mark_context(marks, words)
         except Exception as e:
