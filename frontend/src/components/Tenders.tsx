@@ -268,6 +268,7 @@ function StatusPill({ t }: { t: Tender }) {
   if (t.status === "done") return <span className="pill pill-ok">Ready to review</span>;
   if (t.status === "running") return <span className="pill pill-ai">Running</span>;
   if (t.status === "failed") return <span className="pill pill-reject">Failed</span>;
+  if (t.status === "scanning") return <span className="pill pill-ai">Reading the pack</span>;
   return <span className="pill pill-plain">Not run</span>;
 }
 
@@ -317,6 +318,17 @@ export function TenderView({
   const aiRunning = !!t?.ai_progress?.running;
   const lastSheets = useRef<number>(-1);
   const wasAI = useRef(false);
+  // While the pack is being read: poll until the sheet list is ready
+  const scanning = t?.status === "scanning";
+  useEffect(() => {
+    if (!scanning) return;
+    const h = setInterval(async () => {
+      const x = await api.tender(id).catch(() => null);
+      if (x) setT(x);
+    }, 1000);
+    return () => clearInterval(h);
+  }, [scanning, id]);
+
   useEffect(() => {
     if (!counting && !aiRunning) return;
     const h = setInterval(async () => {
@@ -380,6 +392,17 @@ export function TenderView({
         <div className="page-inner">
           {!t ? (
             <div className="skeleton" style={{ height: 160 }} />
+          ) : t.status === "scanning" ? (
+            <div className="card stack" style={{ gap: 12, padding: 24 }}>
+              <span className="eyebrow">Step 1 of 2 · reading the pack</span>
+              <h2 style={{ margin: 0 }}>Finding the house types and their electrical sheets…</h2>
+              <span className="muted">
+                {t.progress?.total ? `${t.progress.message}` : "Starting…"} You can leave this page: it carries on in the background.
+              </span>
+              <span className="progress-line">
+                <i style={{ width: `${t.progress?.total ? Math.max(3, (t.progress.done / t.progress.total) * 100) : 3}%` }} />
+              </span>
+            </div>
           ) : t.status === "uploaded" || t.status === "failed" ? (
             <RunPanel t={t} onRun={run} hasKey={!!apiKey} />
           ) : counting && !firstSheetDone ? (

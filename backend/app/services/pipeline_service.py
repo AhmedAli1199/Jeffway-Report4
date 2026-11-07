@@ -61,11 +61,15 @@ def _tender_path(tid: str) -> Path:
 
 def load_tender(tid: str) -> Optional[Dict[str, Any]]:
     p = _tender_path(tid)
-    if not p.exists():
-        return None
     with _lock:
-        with open(p, "r") as f:
-            return json.load(f)
+        try:
+            with open(p, "r") as f:
+                return json.load(f)
+        except FileNotFoundError:
+            return None  # e.g. a folder Windows couldn't fully delete
+        except json.JSONDecodeError as e:
+            print(f"[pipeline] tender file {p} unreadable: {e}")
+            return None
 
 
 def save_tender(t: Dict[str, Any]) -> None:
@@ -109,6 +113,9 @@ def reconcile(t: Optional[Dict[str, Any]]) -> Optional[Dict[str, Any]]:
             if v == "running":
                 states[k] = "pending"
         changed = True
+    sth = _running.get(f"{tid}#scan")
+    if t.get("status") == "scanning" and not (sth and sth.is_alive()):
+        start_scan(tid)  # the backend restarted while reading the pack: read it again
     ai = t.get("ai_progress") or {}
     ath = _running.get(f"{tid}#ai")
     if ai.get("running") and not (ath and ath.is_alive()):
@@ -121,8 +128,9 @@ def reconcile(t: Optional[Dict[str, Any]]) -> Optional[Dict[str, Any]]:
 
 def list_tenders() -> List[Dict[str, Any]]:
     out = []
-    for d in sorted(TENDERS_DIR.iterdir(), key=lambda p: p.stat().st_mtime, reverse=True):
-        t = reconcile(load_tender(d.name)) if d.is_dir() else None
+    dirs = [d for d in TENDERS_DIR.iterdir() if d.is_dir() and not d.name.startswith("_deleted_")]
+    for d in sorted(dirs, key=lambda p: p.stat().st_mtime, reverse=True):
+        t = reconcile(load_tender(d.name))
         if t:
             t.get("settings", {}).pop("api_key", None)
             out.append(t)
@@ -131,11 +139,31 @@ def list_tenders() -> List[Dict[str, Any]]:
 
 def load_state(project_id: str) -> Dict[str, Any]:
     p = PROJECTS_DIR / project_id / "state.json"
-    if not p.exists():
-        return {"legends": [], "markers": [], "rooms": [], "excluded_zones": {}}
+    empty = {"legends": [], "markers": [], "rooms": [], "excluded_zones": {}}
     with _lock:
-        with open(p, "r") as f:
-            return json.load(f)
+        if not p.exists():
+            return empty
+        try:
+            with open(p, "r") as f:
+                return json.load(f)
+        except json.JSONDecodeError as e:
+            # A damaged file (e.g. two writers at once): fall back to the last good copy and set the bad one aside
+            bad = p.with_name(f"state.corrupt-{int(time.time())}.json")
+            print(f"[pipeline] {p} unreadable ({e}); kept as {bad.name}")
+            try:
+                p.replace(bad)
+            except OSError:
+                pass
+            bak = p.with_suffix(".bak")
+            if bak.exists():
+                try:
+                    with open(bak) as f:
+                        st = json.load(f)
+                    save_state(project_id, st)
+                    return st
+                except Exception:
+                    pass
+            return empty
 
 
 def save_state(project_id: str, state: Dict[str, Any]) -> None:
@@ -145,6 +173,11 @@ def save_state(project_id: str, state: Dict[str, Any]) -> None:
         tmp = p.with_suffix(".tmp")
         with open(tmp, "w") as f:
             json.dump(state, f, indent=2)
+        if p.exists():
+            try:  # last good copy, for load_state to fall back on
+                shutil.copyfile(p, p.with_suffix(".bak"))
+            except OSError:
+                pass
         tmp.replace(p)
 
 
@@ -187,9 +220,32 @@ def create_tender(name: str, files: List[tuple]) -> Dict[str, Any]:
         "summary": None,
         "settings": dict(DEFAULT_SETTINGS),
     }
+    tender["status"] = "scanning"
+    tender["progress"] = {"stage": "scanning", "message": "Reading the pack…", "done": 0, "total": 0}
     save_tender(tender)
-    scan_pack(tid)
+    start_scan(tid)
     return load_tender(tid)
+
+
+def start_scan(tid: str) -> None:
+    """Read the pack (which PDFs are house types, which sheets are electrical) on a background thread."""
+    key = f"{tid}#scan"
+    th = _running.get(key)
+    if th and th.is_alive():
+        return
+
+    def work():
+        try:
+            scan_pack(tid)
+            update_tender(tid, status="uploaded",
+                          progress={"stage": "uploaded", "message": "Ready to run", "done": 0, "total": 0})
+        except Exception as e:
+            traceback.print_exc()
+            update_tender(tid, status="failed", progress={"stage": "failed", "message": f"Couldn't read the pack: {e}"})
+
+    th = threading.Thread(target=work, daemon=True)
+    _running[key] = th
+    th.start()
 
 
 def refresh_sheet_choice(tid: str) -> int:
@@ -231,7 +287,13 @@ def scan_pack(tid: str) -> None:
     """Sort the pack's PDFs into house-type drawings (have electrical sheets) and other documents."""
     pack = TENDERS_DIR / tid / "pack"
     house_types, documents = [], []
-    for pdf in sorted(pack.rglob("*")):
+    files = [f for f in sorted(pack.rglob("*")) if f.is_file() and "__MACOSX" not in f.parts and not f.name.startswith("._")]
+    n_pdf = sum(1 for f in files if f.suffix.lower() == ".pdf")
+    seen = 0
+    for pdf in files:
+        if pdf.suffix.lower() == ".pdf":
+            seen += 1
+            _progress(tid, stage="scanning", done=seen - 1, total=n_pdf, message=f"Reading {pdf.name} ({seen} of {n_pdf})")
         if not pdf.is_file() or "__MACOSX" in pdf.parts or pdf.name.startswith("._"):
             continue
         rel = str(pdf.relative_to(pack))
@@ -438,6 +500,9 @@ def start_run(tid: str, settings: Dict[str, Any]) -> Dict[str, Any]:
         th = _running.get(tid)
         if th and th.is_alive():
             raise RuntimeError("This tender is already running")
+        sth = _running.get(f"{tid}#scan")
+        if sth and sth.is_alive():
+            raise RuntimeError("Still reading the pack: try again when it has finished")
         s = dict(DEFAULT_SETTINGS)
         s.update({k: v for k, v in (settings or {}).items() if k in DEFAULT_SETTINGS})
         t = update_tender(
@@ -700,7 +765,16 @@ def delete_tender(tid: str) -> None:
             raise RuntimeError("Stop the run before deleting this tender")
         for ht in t.get("house_types", []):
             shutil.rmtree(PROJECTS_DIR / ht["project_id"], ignore_errors=True)
-        shutil.rmtree(TENDERS_DIR / tid, ignore_errors=True)
+        d = TENDERS_DIR / tid
+        shutil.rmtree(d, ignore_errors=True)
+        if d.exists():  # Windows: a file still open somewhere keeps the folder; hide it, retry on next start
+            try:
+                d.rename(TENDERS_DIR / f"_deleted_{tid}")
+            except OSError:
+                try:
+                    _tender_path(tid).unlink()
+                except OSError:
+                    pass
         _running.pop(tid, None)
         _running.pop(f"{tid}#ai", None)
 

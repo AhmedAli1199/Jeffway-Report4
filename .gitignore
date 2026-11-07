@@ -63,3 +63,8 @@ backend/data/symbol_sources/
 # AI provider settings hold the OpenRouter key: never commit
 backend/data/ai_settings.json
 backend/data/model_compare.json
+
+# state backups / damaged copies kept by load_state, temp files
+backend/data/projects/*/state.bak
+backend/data/projects/*/state.corrupt-*.json
+backend/data/**/*.tmp

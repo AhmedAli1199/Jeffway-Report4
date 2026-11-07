@@ -20,7 +20,7 @@ def list_tenders():
 
 
 @router.post("/upload")
-async def upload_tender(
+def upload_tender(  # sync: FastAPI runs it on a worker thread, so a big pack never blocks the other requests
     files: List[UploadFile] = File(...),
     paths: Optional[List[str]] = Form(None),
     name: Optional[str] = Form(None),

@@ -93,11 +93,10 @@ def get_project_details(project_id: str, filepath: Optional[str] = None) -> Dict
         "rooms": []
     }
     if state_file.exists():
-        try:
-            with open(state_file, "r") as f:
-                saved_state = json.load(f)
-        except Exception:
-            pass
+        # The locked loader: it recovers a damaged file from the last good copy instead of returning nothing
+        # (an empty state here would be saved back by the workspace autosave and wipe the marks)
+        from app.services.pipeline_service import load_state
+        saved_state = load_state(project_id)
 
     return {
         "project_id": project_id,

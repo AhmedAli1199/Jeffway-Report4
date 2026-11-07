@@ -119,14 +119,14 @@ def save_project_state(req: SaveStateRequest):
     p_dir = PROJECTS_DIR / req.project_id
     p_dir.mkdir(parents=True, exist_ok=True)
     
-    state_path = p_dir / "state.json"
-    with open(state_path, "w") as f:
-        json.dump({
-            "legends": req.legends,
-            "markers": req.markers,
-            "rooms": req.rooms,
-            "excluded_zones": req.excluded_zones
-        }, f, indent=2)
+    # Same locked, all-or-nothing write the pipeline uses: a half-written state.json can't be read back
+    from app.services.pipeline_service import save_state
+    save_state(req.project_id, {
+        "legends": req.legends,
+        "markers": req.markers,
+        "rooms": req.rooms,
+        "excluded_zones": req.excluded_zones,
+    })
         
     return {"status": "success", "saved_markers": len(req.markers)}
 

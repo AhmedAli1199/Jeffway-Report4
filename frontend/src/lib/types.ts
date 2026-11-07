@@ -195,7 +195,7 @@ export interface Tender {
   tender_id: string;
   name: string;
   created_at: string;
-  status: "uploaded" | "running" | "done" | "failed";
+  status: "scanning" | "uploaded" | "running" | "done" | "failed";
   house_types: HouseType[];
   documents: { path: string; kind: string; pages?: number; error?: string; filepath?: string; sheets?: SheetInfo[]; maybe?: number }[];
   progress: {
