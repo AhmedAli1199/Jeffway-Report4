@@ -59,3 +59,7 @@ backend/data/projects/proj_*/
 backend/data/ai_costs.json
 backend/data/cache/previews/
 backend/data/symbol_sources/
+
+# AI provider settings hold the OpenRouter key: never commit
+backend/data/ai_settings.json
+backend/data/model_compare.json

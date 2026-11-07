@@ -10,6 +10,7 @@ from app.api.exports import router as exports_router
 from app.api.ai_assistant import router as ai_router
 from app.api.symbols import router as symbols_router
 from app.api.tenders import router as tenders_router
+from app.api.ai_models import router as ai_models_router
 
 app = FastAPI(
     title="Jeffway AI Electrical Takeoff Engine",
@@ -33,6 +34,7 @@ app.include_router(exports_router, prefix="/api/exports", tags=["Exports"])
 app.include_router(ai_router, prefix="/api/ai", tags=["AI Assistant"])
 app.include_router(symbols_router, prefix="/api/symbols", tags=["Symbol Library"])
 app.include_router(tenders_router, prefix="/api/tenders", tags=["Tender pipeline"])
+app.include_router(ai_models_router, prefix="/api/ai-models", tags=["AI models"])
 
 # Mount cached images directory
 app.mount("/cache", StaticFiles(directory=str(CACHE_DIR)), name="cache")

@@ -65,13 +65,22 @@ def _record_cost(model_name: str, resp) -> None:
         print(f"[cost_ledger] {e}")
 
 
-def create_vision_chat_completion(client: OpenAI, messages: list, **kwargs):
+def create_vision_chat_completion(client: OpenAI, messages: list, model: Optional[str] = None,
+                                  provider: Optional[str] = None, record: bool = True, **kwargs):
     """
     Executes completion using OpenAI's premier vision model (gpt-4o for maximum optical acuity on CAD drawings),
     with seamless fallback to gpt-4o-mini and gpt-5-mini.
     Ensures 'temperature' is stripped so models requiring default temperature never throw HTTP 400.
     """
-    candidate_models = ["gpt-4o", "gpt-4o-mini", "gpt-5-mini"]
+    from app.services import ai_provider
+    act_provider, act_model = ai_provider.active()
+    provider = provider or act_provider
+    model = model or act_model
+    if provider == "openrouter":
+        candidate_models = [model]  # an explicit choice: no silent switch to another model
+    else:
+        candidate_models = [model] + [m for m in ("gpt-4o", "gpt-4o-mini", "gpt-5-mini") if m != model]
+    kwargs = {**ai_provider.call_extras(provider, model), **kwargs}
     last_err = None
     for model_name in candidate_models:
         call_kwargs = dict(kwargs)
@@ -84,7 +93,8 @@ def create_vision_chat_completion(client: OpenAI, messages: list, **kwargs):
                 messages=messages,
                 **call_kwargs
             )
-            _record_cost(model_name, resp)
+            if record:
+                _record_cost(model_name, resp)
             return resp, model_name
         except Exception as e:
             err_msg = str(e).lower()
@@ -97,7 +107,8 @@ def create_vision_chat_completion(client: OpenAI, messages: list, **kwargs):
                         messages=messages,
                         **call_kwargs
                     )
-                    _record_cost(model_name, resp)
+                    if record:
+                        _record_cost(model_name, resp)
                     return resp, model_name
                 except Exception as retry_err:
                     err_msg = str(retry_err).lower()
@@ -110,13 +121,59 @@ def create_vision_chat_completion(client: OpenAI, messages: list, **kwargs):
             raise e
     raise last_err
 
+def build_check_content(system_instruction: str, template_raw_b64: str, template_strip_b64: str,
+                        batch: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    """The exact message the AI check sends for one batch: instructions, the two reference images, then each
+    candidate with its wall angle and the code text beside it. Used by the check and by the model comparison."""
+    user_content: List[Dict[str, Any]] = [
+        {
+            "type": "text",
+            "text": system_instruction
+        },
+        {
+            "type": "text",
+            "text": "IMAGE 1: Master Pristine Legend Template:"
+        },
+        {
+            "type": "image_url",
+            "image_url": {"url": f"data:image/png;base64,{template_raw_b64}", "detail": "high"}
+        },
+        {
+            "type": "text",
+            "text": "IMAGE 2: 4-Angle Blueprint Wall Rotation Reference Guide (0°, 90°, 180°, 270°):"
+        },
+        {
+            "type": "image_url",
+            "image_url": {"url": f"data:image/png;base64,{template_strip_b64}", "detail": "high"}
+        }
+    ]
+
+    for idx, cand in enumerate(batch, 1):
+        ang = cand.get("angle")
+        ang_str = f" [Wall Alignment: {ang}°]" if ang is not None else ""
+        codes = cand.get("nearby_codes")
+        code_str = (
+            f" Code text printed beside it on the drawing (from the CAD file): {', '.join(codes)}." if codes
+            else (" No code text printed beside it on the drawing (from the CAD file)." if codes is not None else "")
+        )
+        user_content.append({
+            "type": "text",
+            "text": f"Candidate #{idx} (Marker ID: {cand['marker_id']}{ang_str}):{code_str}"
+        })
+        user_content.append({
+            "type": "image_url",
+            "image_url": {"url": f"data:image/png;base64,{cand['patch_b64']}", "detail": "high"}
+        })
+    return user_content
+
+
 class OpenAIService:
     @staticmethod
     def get_client(api_key: Optional[str] = None) -> OpenAI:
-        key = api_key or settings.openai_api_key or os.getenv("OPENAI_API_KEY", "")
-        if not key:
-            raise ValueError("OpenAI API key not provided. Please provide an API key in settings or pass it in the request.")
-        return OpenAI(api_key=key)
+        """The client for the AI model chosen in AI model settings (OpenAI directly, or OpenRouter)."""
+        from app.services import ai_provider
+        provider, _ = ai_provider.active()
+        return ai_provider.client_for(provider, api_key)
 
     @staticmethod
     def analyze_legend_box(image_path: str | Path, api_key: Optional[str] = None) -> List[Dict[str, Any]]:
@@ -330,45 +387,7 @@ class OpenAIService:
                 f"}}"
             )
 
-            user_content: List[Dict[str, Any]] = [
-                {
-                    "type": "text",
-                    "text": system_instruction
-                },
-                {
-                    "type": "text",
-                    "text": "IMAGE 1: Master Pristine Legend Template:"
-                },
-                {
-                    "type": "image_url",
-                    "image_url": {"url": f"data:image/png;base64,{template_raw_b64}", "detail": "high"}
-                },
-                {
-                    "type": "text",
-                    "text": "IMAGE 2: 4-Angle Blueprint Wall Rotation Reference Guide (0°, 90°, 180°, 270°):"
-                },
-                {
-                    "type": "image_url",
-                    "image_url": {"url": f"data:image/png;base64,{template_strip_b64}", "detail": "high"}
-                }
-            ]
-
-            for idx, cand in enumerate(batch, 1):
-                ang = cand.get("angle")
-                ang_str = f" [Wall Alignment: {ang}°]" if ang is not None else ""
-                codes = cand.get("nearby_codes")
-                code_str = (
-                    f" Code text printed beside it on the drawing (from the CAD file): {', '.join(codes)}." if codes
-                    else (" No code text printed beside it on the drawing (from the CAD file)." if codes is not None else "")
-                )
-                user_content.append({
-                    "type": "text",
-                    "text": f"Candidate #{idx} (Marker ID: {cand['marker_id']}{ang_str}):{code_str}"
-                })
-                user_content.append({
-                    "type": "image_url",
-                    "image_url": {"url": f"data:image/png;base64,{cand['patch_b64']}", "detail": "high"}
-                })
+            user_content = build_check_content(system_instruction, template_raw_b64, template_strip_b64, batch)
 
             response, model_used = create_vision_chat_completion(
                 client=client,

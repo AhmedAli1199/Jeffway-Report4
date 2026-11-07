@@ -1,3 +1,4 @@
+import { AIModelModal } from "./AIModels";
 import { useMemo, useState } from "react";
 import { CircleCheck, KeyRound, LoaderCircle, Plus, Search, Sparkles, TriangleAlert, Crop } from "lucide-react";
 import type { CropIntent, Takeoff } from "../state/useTakeoff";
@@ -272,6 +273,7 @@ export function SettingsModal({
   setMode: (m: CanvasMode) => void;
 }) {
   const [key, setKey] = useState(t.apiKey);
+  const [aim, setAim] = useState(false);
   return (
     <Modal
       title="Settings"
@@ -310,6 +312,13 @@ export function SettingsModal({
           Used for AI checks, reading legends and detecting rooms. Stored only in this browser. Leave blank to use the
           key in the backend's .env file.
         </span>
+      </div>
+      <div className="field">
+        <label>AI model</label>
+        <button type="button" className="btn btn-ghost btn-sm" style={{ justifySelf: "start" }} onClick={() => setAim(true)}>
+          Choose the model / OpenRouter key / compare models
+        </button>
+        {aim && <AIModelModal onClose={() => setAim(false)} />}
       </div>
       <div className="field">
         <label>Takeoff engine</label>

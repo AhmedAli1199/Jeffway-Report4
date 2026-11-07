@@ -224,3 +224,61 @@ export interface TenderHouseMarks {
   legends: LegendItem[];
   markers: Marker[];
 }
+
+export interface AISettings {
+  provider: "openai" | "openrouter";
+  model: string;
+  openrouter_key: string;
+  openrouter_key_set: boolean;
+  openai_key_on_server: boolean;
+  ready: boolean;
+}
+
+export interface AIModelInfo {
+  id: string;
+  label: string;
+  group: "suggested" | "other" | "all";
+  input_per_m: number | null;
+  output_per_m: number | null;
+  per_check: number | null;
+}
+
+export interface CompareEstimate {
+  checks: number;
+  marks: number;
+  per_model: Record<string, number | null>;
+  total: number;
+}
+
+export interface CompareScore {
+  model: string;
+  checks: number;
+  failed: number;
+  answered: number;
+  judged: number;
+  right: number;
+  accuracy: number | null;
+  removed_real: number;
+  kept_wrong: number;
+  agrees_with_gpt4o: number | null;
+  cost: number;
+  cost_per_1000_marks: number | null;
+  seconds_per_check: number | null;
+  errors: string[];
+}
+
+export interface CompareResults {
+  status: "none" | "running" | "done";
+  models?: string[];
+  checks?: number;
+  done?: number;
+  total?: number;
+  scores?: CompareScore[];
+  recommended?: string | null;
+  why?: string;
+  judged_marks?: number;
+  min_judged?: number;
+  disagreements?: { marker_id: string; legend: string; patch_b64: string; judged: boolean | null;
+                    answers: Record<string, { valid: boolean; reason: string }> }[];
+  disagreement_count?: number;
+}

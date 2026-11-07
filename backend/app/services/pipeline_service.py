@@ -192,6 +192,41 @@ def create_tender(name: str, files: List[tuple]) -> Dict[str, Any]:
     return load_tender(tid)
 
 
+def refresh_sheet_choice(tid: str) -> int:
+    """Re-read which sheets count with the current sheet rules (e.g. Roof M&E plans now count), for every house
+    type whose sheets nobody picked by hand. Returns the number of house types whose sheets changed."""
+    changed = 0
+    with _lock:
+        t = load_tender(tid)
+        if not t:
+            return 0
+        for ht in t.get("house_types", []):
+            if ht.get("sheets_set_by_hand"):
+                continue
+            # tenders from before the flag: sheets that differ from what the classifier picked at upload were hand-picked
+            picked_then = [p["page_index"] for p in (ht.get("sheets") or []) if p.get("verdict") == "yes"]
+            if ht.get("sheets") and picked_then != [p["page_index"] for p in ht.get("electrical_pages", [])]:
+                continue
+            try:
+                info = PDFService.inspect_pdf(Path(ht["filepath"]))
+            except Exception:
+                continue
+            elec = [{"page_index": p["page_index"], "page_number": p["page_number"], "title": p.get("title", "")}
+                    for p in info["pages"] if p.get("is_electrical")]
+            if elec and [p["page_index"] for p in elec] != [p["page_index"] for p in ht.get("electrical_pages", [])]:
+                ht["electrical_pages"] = elec
+                ht["sheets"] = [{
+                    "page_index": p["page_index"], "page_number": p["page_number"], "title": p.get("title", ""),
+                    "verdict": (p.get("evidence") or {}).get("verdict", "yes" if p.get("is_electrical") else "no"),
+                    "legend_hits": (p.get("evidence") or {}).get("legend_hits", 0),
+                    "reasons": (p.get("evidence") or {}).get("reasons", []),
+                } for p in info["pages"]]
+                changed += 1
+        if changed:
+            save_tender(t)
+    return changed
+
+
 def scan_pack(tid: str) -> None:
     """Sort the pack's PDFs into house-type drawings (have electrical sheets) and other documents."""
     pack = TENDERS_DIR / tid / "pack"
@@ -439,6 +474,13 @@ def _run(tid: str, s: Dict[str, Any]) -> None:
 
 
 def _run_inner(tid: str, s: Dict[str, Any]) -> None:
+    if not s.get("resume"):
+        try:
+            n = refresh_sheet_choice(tid)
+            if n:
+                _progress(tid, message=f"Sheet choice updated for {n} house type(s) with the latest sheet rules")
+        except Exception as e:
+            print(f"[pipeline] sheet refresh skipped: {e}")
     t = load_tender(tid)
     if not t["house_types"]:
         _progress(tid, stage="scanning", message="Reading the tender pack…")
@@ -945,6 +987,13 @@ def apply_decision(project_id: str, marker_id: str, action: str, marker: Optiona
                     m["status"] = "user_verified"
         elif action == "reject":
             st["markers"] = [m for m in ms if m["marker_id"] != marker_id]
+        if action in ("approve", "reject"):
+            try:  # a person's verdict: the answer key for comparing AI models (services/model_compare.py)
+                from app.services import model_compare
+                lid = next((m.get("legend_id") for m in ms if m["marker_id"] == marker_id), None)
+                model_compare.record_label(marker_id, action == "approve", "review", lid)
+            except Exception as e:
+                print(f"[pipeline] decision not logged: {e}")
         elif action == "restore" and marker:
             st["markers"] = [m for m in ms if m["marker_id"] != marker["marker_id"]] + [marker]
         else:
@@ -962,6 +1011,7 @@ def bulk_approve(project_ids: List[str], marker_ids: List[str]) -> int:
             for m in st.get("markers", []):
                 if m["marker_id"] in ids and m.get("status") not in ("user_verified", "manual_added"):
                     m["status"] = "user_verified"
+                    m.setdefault("metadata", {})["bulk_approved"] = True  # not looked at one by one
                     n += 1
             save_state(pid, st)
     return n
@@ -1018,6 +1068,7 @@ def set_sheets(tid: str, rel_path: str, page_indexes: List[int]) -> Dict[str, An
         elif not doc:
             raise KeyError(rel_path)
         if ht and chosen:
+            ht["sheets_set_by_hand"] = True  # a re-run won't re-pick this house type's sheets
             by_idx = {p["page_index"]: p for p in (ht.get("sheets") or [])}
             ht["electrical_pages"] = [
                 {"page_index": i, "page_number": i + 1, "title": (by_idx.get(i) or {}).get("title", "")} for i in chosen

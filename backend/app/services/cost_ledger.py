@@ -37,11 +37,40 @@ def current_tag() -> str:
     return getattr(_ctx, "tag", None) or "workspace"
 
 
+def _rates(model: str) -> Tuple[float, float]:
+    """USD per 1M tokens: our table for OpenAI models, else OpenRouter's public list, else GPT-4o's."""
+    bare = model.split("/", 1)[1] if model.startswith("openai/") else model
+    if bare in PRICES:
+        return PRICES[bare]
+    try:
+        from app.services import ai_provider
+        pp = ai_provider.price_per_token(model)
+        if pp:
+            return pp[0] * 1e6, pp[1] * 1e6
+    except Exception:
+        pass
+    return PRICES["gpt-4o"]
+
+
+def _reported_cost(usage: Any) -> Optional[float]:
+    """OpenRouter puts the real charge for the call in usage.cost (thinking tokens included)."""
+    c = getattr(usage, "cost", None)
+    if c is None:
+        extra = getattr(usage, "model_extra", None) or {}
+        c = extra.get("cost")
+    try:
+        return float(c) if c is not None else None
+    except (TypeError, ValueError):
+        return None
+
+
 def price(model: str, usage: Any) -> Dict[str, Any]:
     pin = int(getattr(usage, "prompt_tokens", 0) or 0)
     pout = int(getattr(usage, "completion_tokens", 0) or 0)
-    pi, po = PRICES.get(model, PRICES["gpt-4o"])
-    return {"input_tokens": pin, "output_tokens": pout, "cost": round(pin * pi / 1e6 + pout * po / 1e6, 6)}
+    pi, po = _rates(model)
+    cost = _reported_cost(usage)
+    return {"input_tokens": pin, "output_tokens": pout,
+            "cost": round(cost if cost is not None else pin * pi / 1e6 + pout * po / 1e6, 6)}
 
 
 def _load() -> list:
@@ -55,9 +84,8 @@ def _load() -> list:
 
 
 def record(model: str, usage: Any, kind: str = "vision") -> Dict[str, Any]:
-    pin = int(getattr(usage, "prompt_tokens", 0) or 0)
-    pout = int(getattr(usage, "completion_tokens", 0) or 0)
-    pi, po = PRICES.get(model, PRICES["gpt-4o"])
+    priced = price(model, usage)
+    pin, pout = priced["input_tokens"], priced["output_tokens"]
     entry = {
         "ts": time.time(),
         "day": time.strftime("%Y-%m-%d"),
@@ -66,7 +94,7 @@ def record(model: str, usage: Any, kind: str = "vision") -> Dict[str, Any]:
         "tag": getattr(_ctx, "tag", None) or "workspace",
         "input_tokens": pin,
         "output_tokens": pout,
-        "cost": round(pin * pi / 1e6 + pout * po / 1e6, 6),
+        "cost": priced["cost"],
     }
     with _lock:
         data = _load()
@@ -84,12 +112,19 @@ def total_for(tag: str) -> float:
 
 
 def cost_per_call() -> Tuple[float, str]:
-    """Average real cost of recent mark-checking calls, or the default estimate."""
+    """Average real cost of recent mark-checking calls with the model now chosen, or an estimate at its price."""
+    try:
+        from app.services import ai_provider
+        _, model = ai_provider.active()
+    except Exception:
+        model = "gpt-4o"
+    same = {model, model.split("/", 1)[1] if model.startswith("openai/") else f"openai/{model}"}
     with _lock:
-        recent = [e for e in _load() if e.get("kind") == "vision" and e.get("cost")][-50:]
+        recent = [e for e in _load() if e.get("kind") == "vision" and e.get("cost") and e.get("model") in same][-50:]
     if len(recent) >= 3:
-        return round(sum(e["cost"] for e in recent) / len(recent), 5), f"average of your last {len(recent)} calls"
-    return DEFAULT_COST_PER_CALL, "estimate at GPT-4o list prices"
+        return round(sum(e["cost"] for e in recent) / len(recent), 5), f"average of your last {len(recent)} calls with {model}"
+    pi, po = _rates(model)
+    return round(4200 * pi / 1e6 + 700 * po / 1e6, 5), f"estimate at {model} list prices"
 
 
 def summary(tag_names: Optional[Dict[str, str]] = None) -> Dict[str, Any]:

@@ -5,10 +5,11 @@ import {
 } from "lucide-react";
 import { api, type PackFile } from "../lib/api";
 import { useToast } from "../lib/toast";
-import type { RunSettings, Tender, TenderHouseMarks, ThemePref } from "../lib/types";
+import type { AISettings, RunSettings, Tender, TenderHouseMarks, ThemePref } from "../lib/types";
 import { baseName, cx, isApproved } from "../lib/util";
 import { CostPill, refreshCosts, usd } from "./Costs";
 import { AuditList } from "./AuditLog";
+import { AIModelModal } from "./AIModels";
 import { SheetPicker } from "./SheetPicker";
 import { SymbolLibrary } from "./SymbolLibrary";
 import type { SheetInfo } from "../lib/types";
@@ -21,6 +22,7 @@ export function PageHeader({
   theme, setTheme, onHome, children,
 }: { theme: ThemePref; setTheme: (t: ThemePref) => void; onHome: () => void; children?: React.ReactNode }) {
   const [lib, setLib] = useState(false);
+  const [aim, setAim] = useState(false);
   const next: ThemePref = theme === "system" ? "light" : theme === "light" ? "dark" : "system";
   const Icon = theme === "dark" ? Moon : theme === "light" ? Sun : Monitor;
   return (
@@ -34,6 +36,10 @@ export function PageHeader({
         <BookOpen size={14} /> Symbol library
       </button>
       {lib && <SymbolLibrary onClose={() => setLib(false)} />}
+      <button className="btn btn-ghost btn-sm" onClick={() => setAim(true)} title="Which AI model checks borderline marks">
+        <Sparkles size={14} /> AI model
+      </button>
+      {aim && <AIModelModal onClose={() => setAim(false)} />}
       <CostPill />
       <button className="icon-btn" aria-label={`Theme: ${theme}`} title={`Theme: ${theme}`} onClick={() => setTheme(next)}>
         <Icon size={16} />
@@ -1025,6 +1031,11 @@ function AIPanel({
   const [est, setEst] = useState<AIEstimate | null>(null);
   const [confirm, setConfirm] = useState(false);
   const [showLog, setShowLog] = useState(false);
+  const [showModel, setShowModel] = useState(false);
+  const [aiCfg, setAiCfg] = useState<AISettings | null>(null);
+  useEffect(() => {
+    api.aiSettings().then(setAiCfg).catch(() => {});
+  }, []);
 
   useEffect(() => {
     let alive = true;
@@ -1064,8 +1075,12 @@ function AIPanel({
         </span>
         <span className="row">
           {spent > 0 && <span className="muted">Spent on this tender: <b className="mono" style={{ color: "var(--fg)" }}>{usd(spent)}</b></span>}
+          <button className="btn btn-ghost btn-sm" onClick={() => setShowModel(true)} title="Change the model or compare models">
+            {aiCfg ? `${aiCfg.provider === "openrouter" ? "OpenRouter" : "OpenAI"} · ${aiCfg.model}` : "AI model"}
+          </button>
           <button className="btn btn-ghost btn-sm" onClick={() => setShowLog(true)}>AI decisions log</button>
         </span>
+        {showModel && <AIModelModal onClose={() => { setShowModel(false); api.aiSettings().then(setAiCfg).catch(() => {}); }} />}
         {showLog && (
           <Modal wide title="AI decisions" subtitle="Every AI call for this tender: open one to see the images it was sent and its verdict on each." onClose={() => setShowLog(false)}>
             <AuditList tag={t.tender_id} />

@@ -14,6 +14,10 @@ import type {
   RunSettings,
   AIEstimate,
   CostSummary,
+  AISettings,
+  AIModelInfo,
+  CompareEstimate,
+  CompareResults,
 } from "./types";
 
 export const API_BASE: string =
@@ -205,6 +209,17 @@ export const api = {
     postJson<{ ok: boolean }>(`/tenders/${q(id)}/decision`, body, "Couldn't save decision"),
   approveMany: (id: string, project_ids: string[], marker_ids: string[]) =>
     postJson<{ approved: number }>(`/tenders/${q(id)}/approve-many`, { project_ids, marker_ids }, "Couldn't approve"),
+  aiSettings: () => request<AISettings>("/ai-models/settings", undefined, "Couldn't load AI settings"),
+  saveAISettings: (body: { provider?: string; model?: string; openrouter_key?: string }) =>
+    postJson<AISettings>("/ai-models/settings", body, "Couldn't save AI settings"),
+  aiCatalogue: () => request<{ models: AIModelInfo[] }>("/ai-models/catalogue", undefined, "Couldn't load the model list"),
+  compareEstimate: (body: { models: string[]; checks: number }) =>
+    postJson<CompareEstimate>("/ai-models/compare/estimate", body, "Couldn't estimate"),
+  compareStart: (body: { models: string[]; checks: number }) =>
+    postJson<CompareResults>("/ai-models/compare", body, "Couldn't start the comparison"),
+  compareResults: () => request<CompareResults>("/ai-models/compare", undefined, "Couldn't load the comparison"),
+  compareLabel: (marker_id: string, valid: boolean) =>
+    postJson<CompareResults>("/ai-models/compare/label", { marker_id, valid }, "Couldn't save"),
   aiEstimate: (id: string, body: { ai_low: number; auto_high: number; max_ai_marks?: number; project_ids?: string[] }) =>
     postJson<AIEstimate>(`/tenders/${q(id)}/ai-estimate`, body, "Couldn't estimate"),
   aiRun: (id: string, body: { ai_low: number; auto_high: number; max_ai_marks?: number; api_key?: string; project_ids?: string[] }) =>

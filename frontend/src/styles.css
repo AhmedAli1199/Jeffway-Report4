@@ -694,3 +694,10 @@ button, input, select, textarea { font: inherit; color: inherit; }
 .page-pick-item:hover { box-shadow: 0 0 0 2px var(--copper); }
 .page-pick-item img { width: 100%; aspect-ratio: 1.414; object-fit: contain; }
 .page-pick-item span { padding: 4px 8px; font-size: 11px; color: var(--fg-2); text-align: left; background: var(--surface); }
+
+/* AI model comparison */
+.chip-check { display: inline-flex; align-items: center; gap: 6px; height: 28px; padding: 0 10px; border-radius: 99px;
+  font-size: 12px; background: var(--surface-2); box-shadow: inset 0 0 0 1px var(--line); cursor: pointer; }
+.chip-check.on { background: var(--surface); box-shadow: inset 0 0 0 1px var(--fg-3); }
+.chip-check input { margin: 0; }
+.boq tr.row-win td { background: var(--ok-soft); }
