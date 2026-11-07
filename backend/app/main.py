@@ -51,3 +51,20 @@ def root():
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run("app.main:app", host="127.0.0.1", port=8000, reload=True)
+
+
+@app.on_event("startup")
+def _finish_deletes() -> None:
+    """Remove tender folders Windows couldn't delete while a file in them was open."""
+    try:
+        from app.services.pipeline_service import cleanup_deleted
+        cleanup_deleted()
+    except Exception as e:
+        print(f"[startup] cleanup skipped: {e}")
+
+
+@app.get("/api/health")
+def health():
+    """Answers even when the tender lock is busy: what's running and whether anything is stuck."""
+    from app.services.pipeline_service import health as h
+    return h()

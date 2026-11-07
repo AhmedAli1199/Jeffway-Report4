@@ -122,12 +122,15 @@ _models_cache: Dict[str, Any] = {"t": 0.0, "data": {}}
 def _models() -> Dict[str, Dict[str, Any]]:
     if time.time() - _models_cache["t"] < 6 * 3600 and _models_cache["data"]:
         return _models_cache["data"]
+    if time.time() - _models_cache.get("failed", 0.0) < 600:
+        return _models_cache["data"]  # OpenRouter unreachable a moment ago: don't make every request wait again
     try:
-        r = httpx.get(f"{OPENROUTER_BASE}/models", timeout=20)
+        r = httpx.get(f"{OPENROUTER_BASE}/models", timeout=6)
         r.raise_for_status()
         data = {m["id"]: m for m in r.json().get("data", [])}
         _models_cache.update(t=time.time(), data=data)
     except Exception as e:
+        _models_cache["failed"] = time.time()
         print(f"[ai_provider] model list unavailable: {e}")
     return _models_cache["data"]
 

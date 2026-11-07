@@ -49,7 +49,62 @@ DEFAULT_SETTINGS = {
     "api_key": None,
 }
 
-_lock = threading.RLock()
+class _WatchedLock:
+    """The shared lock for tender / state files, plus a record of who holds it, so a watchdog can say what is
+    blocking every request if it is ever held for long (see _watchdog)."""
+
+    def __init__(self) -> None:
+        self._l = threading.RLock()
+        self.owner: Optional[int] = None
+        self.since = 0.0
+        self.depth = 0
+
+    def acquire(self, *a, **k):
+        ok = self._l.acquire(*a, **k)
+        if ok:
+            if self.depth == 0:
+                self.owner, self.since = threading.get_ident(), time.time()
+            self.depth += 1
+        return ok
+
+    def release(self) -> None:
+        self.depth -= 1
+        if self.depth == 0:
+            self.owner = None
+        self._l.release()
+
+    __enter__ = acquire
+
+    def __exit__(self, *exc) -> None:
+        self.release()
+
+
+_lock = _WatchedLock()
+
+
+def _watchdog() -> None:
+    import sys
+    warned = 0.0
+    while True:
+        time.sleep(5)
+        owner, since = _lock.owner, _lock.since
+        if owner and time.time() - since > 10 and since != warned:
+            warned = since
+            frame = sys._current_frames().get(owner)
+            where = "".join(traceback.format_stack(frame)[-6:]) if frame else "?"
+            print(f"[watchdog] the tender lock has been held for {time.time() - since:.0f}s by:\n{where}", flush=True)
+
+
+threading.Thread(target=_watchdog, daemon=True, name="lock-watchdog").start()
+
+
+def health() -> Dict[str, Any]:
+    """What the backend is doing, without touching the lock (for /api/health)."""
+    return {
+        "ok": True,
+        "lock_held_for_s": round(time.time() - _lock.since, 1) if _lock.owner else 0,
+        "background": sorted(k for k, th in _running.items() if th and th.is_alive()),
+    }
 _running: Dict[str, threading.Thread] = {}
 
 
@@ -250,37 +305,49 @@ def start_scan(tid: str) -> None:
 
 def refresh_sheet_choice(tid: str) -> int:
     """Re-read which sheets count with the current sheet rules (e.g. Roof M&E plans now count), for every house
-    type whose sheets nobody picked by hand. Returns the number of house types whose sheets changed."""
-    changed = 0
+    type whose sheets nobody picked by hand. Returns the number of house types whose sheets changed.
+
+    The PDFs are read without holding the shared lock (reading 25 drawings takes a while, and every other
+    request waits on that lock); the lock is only taken to save the result."""
+    t = load_tender(tid)
+    if not t:
+        return 0
+    updates: Dict[str, Dict[str, Any]] = {}
+    for ht in t.get("house_types", []):
+        if ht.get("sheets_set_by_hand"):
+            continue
+        # tenders from before the flag: sheets that differ from what the classifier picked at upload were hand-picked
+        picked_then = [p["page_index"] for p in (ht.get("sheets") or []) if p.get("verdict") == "yes"]
+        if ht.get("sheets") and picked_then != [p["page_index"] for p in ht.get("electrical_pages", [])]:
+            continue
+        try:
+            info = PDFService.inspect_pdf(Path(ht["filepath"]))
+        except Exception:
+            continue
+        elec = [{"page_index": p["page_index"], "page_number": p["page_number"], "title": p.get("title", "")}
+                for p in info["pages"] if p.get("is_electrical")]
+        if elec and [p["page_index"] for p in elec] != [p["page_index"] for p in ht.get("electrical_pages", [])]:
+            updates[ht["project_id"]] = {"electrical_pages": elec, "sheets": [{
+                "page_index": p["page_index"], "page_number": p["page_number"], "title": p.get("title", ""),
+                "verdict": (p.get("evidence") or {}).get("verdict", "yes" if p.get("is_electrical") else "no"),
+                "legend_hits": (p.get("evidence") or {}).get("legend_hits", 0),
+                "reasons": (p.get("evidence") or {}).get("reasons", []),
+            } for p in info["pages"]]}
+    if not updates:
+        return 0
     with _lock:
         t = load_tender(tid)
         if not t:
             return 0
+        n = 0
         for ht in t.get("house_types", []):
-            if ht.get("sheets_set_by_hand"):
-                continue
-            # tenders from before the flag: sheets that differ from what the classifier picked at upload were hand-picked
-            picked_then = [p["page_index"] for p in (ht.get("sheets") or []) if p.get("verdict") == "yes"]
-            if ht.get("sheets") and picked_then != [p["page_index"] for p in ht.get("electrical_pages", [])]:
-                continue
-            try:
-                info = PDFService.inspect_pdf(Path(ht["filepath"]))
-            except Exception:
-                continue
-            elec = [{"page_index": p["page_index"], "page_number": p["page_number"], "title": p.get("title", "")}
-                    for p in info["pages"] if p.get("is_electrical")]
-            if elec and [p["page_index"] for p in elec] != [p["page_index"] for p in ht.get("electrical_pages", [])]:
-                ht["electrical_pages"] = elec
-                ht["sheets"] = [{
-                    "page_index": p["page_index"], "page_number": p["page_number"], "title": p.get("title", ""),
-                    "verdict": (p.get("evidence") or {}).get("verdict", "yes" if p.get("is_electrical") else "no"),
-                    "legend_hits": (p.get("evidence") or {}).get("legend_hits", 0),
-                    "reasons": (p.get("evidence") or {}).get("reasons", []),
-                } for p in info["pages"]]
-                changed += 1
-        if changed:
+            u = updates.get(ht["project_id"])
+            if u and not ht.get("sheets_set_by_hand"):  # someone may have picked sheets meanwhile
+                ht.update(u)
+                n += 1
+        if n:
             save_tender(t)
-    return changed
+    return n
 
 
 def scan_pack(tid: str) -> None:
@@ -763,34 +830,52 @@ def delete_tender(tid: str) -> None:
         th = _running.get(tid)
         if th and th.is_alive():
             raise RuntimeError("Stop the run before deleting this tender")
-        for ht in t.get("house_types", []):
-            shutil.rmtree(PROJECTS_DIR / ht["project_id"], ignore_errors=True)
+        # Hide it at once (the list skips it), then remove the files without holding the lock
         d = TENDERS_DIR / tid
-        shutil.rmtree(d, ignore_errors=True)
-        if d.exists():  # Windows: a file still open somewhere keeps the folder; hide it, retry on next start
+        gone = TENDERS_DIR / f"_deleted_{tid}"
+        try:
+            d.rename(gone)
+        except OSError:
+            gone = d
             try:
-                d.rename(TENDERS_DIR / f"_deleted_{tid}")
+                _tender_path(tid).unlink()
             except OSError:
-                try:
-                    _tender_path(tid).unlink()
-                except OSError:
-                    pass
+                pass
+        projects = [PROJECTS_DIR / ht["project_id"] for ht in t.get("house_types", [])]
         _running.pop(tid, None)
         _running.pop(f"{tid}#ai", None)
+    for p in projects:
+        shutil.rmtree(p, ignore_errors=True)
+    shutil.rmtree(gone, ignore_errors=True)  # Windows may keep a locked file: cleared on the next start
+
+
+def cleanup_deleted() -> None:
+    """Finish deleting tender folders Windows couldn't remove last time (called at startup)."""
+    for d in TENDERS_DIR.glob("_deleted_*"):
+        shutil.rmtree(d, ignore_errors=True)
 
 
 def _finish_house(pid: str, ht: Dict[str, Any], checks) -> None:
-    """Run the per-house checks over everything saved for this house type, then save."""
-    titles = {p["page_index"]: p.get("title") or "" for p in ht["electrical_pages"]}
-    with _lock:
-        st = load_state(pid)
-        by_page: Dict[int, List[Dict[str, Any]]] = {}
-        for m in st.get("markers", []):
-            by_page.setdefault(m.get("page_index"), []).append(m)
-        sheets = [{"pdf": ht["filepath"], "page_index": pi, "title": titles.get(pi, ""), "marks": ms} for pi, ms in by_page.items()]
-        if checks.finish_house(sheets):
-            save_state(pid, st)
+    """Run the per-house checks over everything saved for this house type, then save.
 
+    The checks read the drawings, so they run on a copy without the shared lock; only the marks they changed
+    are written back, by id, under the lock (a decision made meanwhile in the review queue is kept)."""
+    titles = {p["page_index"]: p.get("title") or "" for p in ht["electrical_pages"]}
+    st = load_state(pid)
+    by_page: Dict[int, List[Dict[str, Any]]] = {}
+    for m in st.get("markers", []):
+        by_page.setdefault(m.get("page_index"), []).append(m)
+    sheets = [{"pdf": ht["filepath"], "page_index": pi, "title": titles.get(pi, ""), "marks": ms} for pi, ms in by_page.items()]
+    if not checks.finish_house(sheets):
+        return
+    changed = {m["marker_id"]: m for m in st.get("markers", []) if (m.get("metadata") or {}).get("detail_sheet")}
+    with _lock:
+        cur = load_state(pid)
+        for m in cur.get("markers", []):
+            c = changed.get(m.get("marker_id"))
+            if c and m.get("status") not in ("user_verified", "manual_added"):
+                m.update({"confidence_score": c["confidence_score"], "status": c["status"], "metadata": c["metadata"]})
+        save_state(pid, cur)
 
 
 def _merge_sheet(pid: str, page_index: int, clean: List[Dict[str, Any]], zone: Optional[Dict[str, float]]) -> int:
