@@ -24,9 +24,11 @@ GANG_REACH = 1.6  # switch centres closer than this many symbol widths share one
 
 import os
 
-# How switches drawn together become plates (see gang_switches). "same_side" is the rule Jeffway's
+# How switches drawn together become plates (see gang_switches). Measured on 7 house types against Jeffway's
+# workbook: "any" (touching = one plate, even across a wall at a door jamb) 89 items off, "same_side" 101,
+# "*_no_int" 113-119, "off" 155. "any" is what Jeffway's numbers support; question P-switch in the rules doc.
 # workbook supports; the others are kept so the accuracy harness can compare them.
-GANG_MODE = os.getenv("PLOTLINE_GANG_MODE", "same_side")
+GANG_MODE = os.getenv("PLOTLINE_GANG_MODE", "any")
 
 
 def _switch_family(symbols: List[Dict[str, Any]], legend_of: Callable) -> Dict[str, Any]:
@@ -52,12 +54,6 @@ def gang_switches(marks: List[Dict[str, Any]], family: Dict[str, Any], min_score
     two = family["two_gang"]
     if not two or mode == "off":
         return 0
-    mask = None
-    if mode != "any" and pdf is not None and page_index is not None:
-        try:
-            mask = rooms.wall_mask(str(pdf), page_index)
-        except Exception:
-            mask = None
     sw = [m for m in marks if m["legend_id"] in family["family"] and m["confidence_score"] >= min_score
           and m.get("status") != "possible_missed"]
     sw.sort(key=lambda m: -m["confidence_score"])
@@ -77,15 +73,25 @@ def gang_switches(marks: List[Dict[str, Any]], family: Dict[str, Any], min_score
             d = ((bc[0] - ac[0]) ** 2 + (bc[1] - ac[1]) ** 2) ** 0.5
             if d >= best_d:
                 continue
-            if mode.startswith("same_side") and rooms.wall_between(mask, ac, bc):
-                continue  # back to back on the two faces of a wall
+            if mode.startswith("same_side") and pdf is not None:
+                sa, sb = rooms.side_of(str(pdf), page_index, ac), rooms.side_of(str(pdf), page_index, bc)
+                if sa is not None and sb is not None and sa != sb:
+                    continue  # back to back on the two faces of a wall: two rooms, two plates
             best, best_d = b, d
         if best is None:
             continue
         used |= {id(a), id(best)}
         meta = dict(a.get("metadata") or {})
+        bc = (best["x"] + best["width"] / 2, best["y"] + best["height"] / 2)
+        across = False
+        if pdf is not None:
+            sa, sb = rooms.side_of(str(pdf), page_index, ac), rooms.side_of(str(pdf), page_index, bc)
+            across = sa is not None and sb is not None and sa != sb
         meta["gang"] = {"from": [a["legend_id"], best["legend_id"]], "scores": [a["confidence_score"], best["confidence_score"]],
-                        "note": "Two switches drawn side by side on the same side of the wall: one 2-gang plate"}
+                        "across_wall": across,
+                        "note": ("Two switches drawn at one spot, one on each face of the wall: counted as one 2-gang plate, "
+                                 "as Jeffway's workbook does for switch clusters at a door. Delete if they are two plates in two rooms")
+                        if across else "Two switches drawn side by side: one 2-gang plate"}
         x0, y0 = min(a["x"], best["x"]), min(a["y"], best["y"])
         x1 = max(a["x"] + a["width"], best["x"] + best["width"])
         y1 = max(a["y"] + a["height"], best["y"] + best["height"])

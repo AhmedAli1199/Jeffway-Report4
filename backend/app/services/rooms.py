@@ -223,3 +223,22 @@ def wall_between(mask: Optional[np.ndarray], a: Tuple[float, float], b: Tuple[fl
         if 0 <= x < w and 0 <= y < h and mask[y, x]:
             return True
     return False
+
+
+def side_of(pdf: str, page_index: int, pt: Tuple[float, float], reach: int = 22) -> Optional[int]:
+    """Which enclosed area (room) a point beside a wall belongs to: the commonest area in a small window round it.
+    Switches are drawn touching a wall face, so the point itself is often on the wall line."""
+    try:
+        r = sheet_rooms(pdf, page_index)
+    except Exception:
+        r = None
+    if not r:
+        return None
+    areas = r[0]
+    h, w = areas.shape
+    x, y = int(pt[0]), int(pt[1])
+    win = areas[max(0, y - reach):min(h, y + reach + 1), max(0, x - reach):min(w, x + reach + 1)]
+    vals, counts = np.unique(win[win > 0], return_counts=True)
+    if not len(vals):
+        return None
+    return int(vals[counts.argmax()])
