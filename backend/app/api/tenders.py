@@ -104,6 +104,30 @@ def set_sheets(tender_id: str, s: Sheets):
         raise HTTPException(404, "Tender or file not found")
 
 
+@router.post("/{tender_id}/reset")
+def reset_tender(tender_id: str):
+    """Delete every mark (approved and AI-checked too) so the next run starts from scratch."""
+    try:
+        t = ps.reset_tender(tender_id)
+    except KeyError:
+        raise HTTPException(404, "Tender not found")
+    except RuntimeError as e:
+        raise HTTPException(409, str(e))
+    t.get("settings", {}).pop("api_key", None)
+    return t
+
+
+@router.delete("/{tender_id}")
+def delete_tender(tender_id: str):
+    try:
+        ps.delete_tender(tender_id)
+    except KeyError:
+        raise HTTPException(404, "Tender not found")
+    except RuntimeError as e:
+        raise HTTPException(409, str(e))
+    return {"ok": True}
+
+
 @router.post("/{tender_id}/stop")
 def stop(tender_id: str):
     """Stop a running takeoff after its current sheet. Everything counted so far is kept."""

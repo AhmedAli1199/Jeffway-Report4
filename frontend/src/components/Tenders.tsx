@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ArrowRight, BookOpen, Check, Download, FileSpreadsheet, ChevronDown, ChevronRight, CircleCheck, FileText, FolderOpen, FolderUp, Layers,
-  LoaderCircle, Minus, Monitor, Moon, Play, Plus, Sparkles, Sun, TriangleAlert, Upload, Zap, PencilRuler,
+  LoaderCircle, Minus, Monitor, Moon, Play, Plus, Sparkles, Sun, TriangleAlert, Upload, Zap, PencilRuler, Trash2, RotateCcw,
 } from "lucide-react";
 import { api, type PackFile } from "../lib/api";
 import { useToast } from "../lib/toast";
@@ -17,6 +17,25 @@ import { MenuButton, Modal } from "./ui";
 import type { AIEstimate } from "../lib/types";
 
 /* ------------------------------------------------------------------ shared */
+
+/** "Are you sure?" for actions that delete work. */
+function ConfirmDanger({ title, body, action, onConfirm, onClose }: {
+  title: string; body: React.ReactNode; action: string; onConfirm: () => Promise<void>; onClose: () => void;
+}) {
+  const [busy, setBusy] = useState(false);
+  return (
+    <Modal title={title} onClose={onClose} footer={
+      <>
+        <button className="btn btn-ghost" onClick={onClose} disabled={busy}>Cancel</button>
+        <button className="btn btn-danger" disabled={busy} onClick={async () => { setBusy(true); try { await onConfirm(); } finally { setBusy(false); } }}>
+          {busy ? <LoaderCircle size={14} className="spin" /> : <Trash2 size={14} />} {action}
+        </button>
+      </>
+    }>
+      <div className="stack" style={{ gap: 8 }}>{body}</div>
+    </Modal>
+  );
+}
 
 export function PageHeader({
   theme, setTheme, onHome, children,
@@ -84,6 +103,7 @@ export function HomeView({
 }) {
   const toast = useToast();
   const [tenders, setTenders] = useState<Tender[] | null>(null);
+  const [del, setDel] = useState<Tender | null>(null);
   const [drag, setDrag] = useState(false);
   const [uploading, setUploading] = useState<string | null>(null);
   const folderRef = useRef<HTMLInputElement>(null);
@@ -198,7 +218,8 @@ export function HomeView({
             ) : (
               <div className="tender-list">
                 {tenders.map((t) => (
-                  <button key={t.tender_id} className="tender-row" onClick={() => onOpenTender(t.tender_id)}>
+                  <div key={t.tender_id} className="tender-row-wrap">
+                  <button className="tender-row" onClick={() => onOpenTender(t.tender_id)}>
                     <span className="tender-icon"><Layers size={16} /></span>
                     <span className="meta">
                       <b>{t.name}</b>
@@ -210,12 +231,35 @@ export function HomeView({
                     <StatusPill t={t} />
                     <ChevronRight size={16} className="muted" />
                   </button>
+                  <button className="icon-btn tender-del" title="Delete this tender" aria-label={`Delete ${t.name}`}
+                    onClick={() => setDel(t)}><Trash2 size={15} /></button>
+                  </div>
                 ))}
               </div>
             )}
           </section>
         </div>
       </main>
+      {del && (
+        <ConfirmDanger
+          title={`Delete "${del.name}"?`}
+          action="Delete tender"
+          onClose={() => setDel(null)}
+          body={<>
+            <p style={{ margin: 0 }}>This deletes the uploaded pack, every house type and every mark in it, including approved and AI-checked ones. It can't be undone.</p>
+            <p className="muted" style={{ margin: 0 }}>AI spend already recorded stays in the cost total.</p>
+          </>}
+          onConfirm={async () => {
+            try {
+              await api.deleteTender(del.tender_id);
+              setTenders((ts) => (ts ?? []).filter((x) => x.tender_id !== del.tender_id));
+              setDel(null);
+            } catch (e) {
+              toast({ tone: "error", title: "Couldn't delete", body: (e as Error).message });
+            }
+          }}
+        />
+      )}
     </div>
   );
 }
@@ -252,6 +296,7 @@ export function TenderView({
   const toast = useToast();
   const [t, setT] = useState<Tender | null>(null);
   const [marks, setMarks] = useState<TenderHouseMarks[] | null>(null);
+  const [confirm, setConfirm] = useState<"fresh" | "delete" | null>(null);
 
   const load = useCallback(async () => {
     try {
@@ -364,6 +409,8 @@ export function TenderView({
                 onReview={onReview}
                 onOpenDrawing={onOpenDrawing}
                 onRerun={() => setT({ ...t, status: "uploaded" })}
+                onFresh={() => setConfirm("fresh")}
+                onDelete={() => setConfirm("delete")}
                 apiKey={apiKey}
                 onAIStarted={(nt) => setT(nt)}
                 onPlots={async (pid, n) => {
@@ -378,6 +425,46 @@ export function TenderView({
           )}
         </div>
       </main>
+      {confirm === "fresh" && t && (
+        <ConfirmDanger
+          title="Start this tender from scratch?"
+          action="Delete every mark"
+          onClose={() => setConfirm(null)}
+          body={<>
+            <p style={{ margin: 0 }}>Every mark on every house type is deleted, including the ones you approved, added by hand and the AI
+              confirmed, and the AI-check history is cleared. The pack, the sheets chosen and the plot numbers stay.</p>
+            <p className="muted" style={{ margin: 0 }}>Then press Run to count it all again with the latest checks.</p>
+          </>}
+          onConfirm={async () => {
+            try {
+              const nt = await api.resetTender(id);
+              setMarks(null);
+              setT(nt);
+              setConfirm(null);
+              toast({ tone: "success", title: "Tender cleared", body: "Every mark is gone. Press Run to count it again from scratch." });
+            } catch (e) {
+              toast({ tone: "error", title: "Couldn't clear the tender", body: (e as Error).message });
+            }
+          }}
+        />
+      )}
+      {confirm === "delete" && t && (
+        <ConfirmDanger
+          title={`Delete "${t.name}"?`}
+          action="Delete tender"
+          onClose={() => setConfirm(null)}
+          body={<p style={{ margin: 0 }}>This deletes the uploaded pack, every house type and every mark in it. It can't be undone.</p>}
+          onConfirm={async () => {
+            try {
+              await api.deleteTender(id);
+              setConfirm(null);
+              onHome();
+            } catch (e) {
+              toast({ tone: "error", title: "Couldn't delete", body: (e as Error).message });
+            }
+          }}
+        />
+      )}
     </div>
   );
 }
@@ -715,7 +802,7 @@ function Progress({ t, onStop }: { t: Tender; onStop: () => void }) {
 }
 
 function Overview({
-  t, marks, threshold, setThreshold, onReview, onOpenDrawing, onRerun, onPlots, apiKey, onAIStarted,
+  t, marks, threshold, setThreshold, onReview, onOpenDrawing, onRerun, onFresh, onDelete, onPlots, apiKey, onAIStarted,
 }: {
   t: Tender;
   marks: TenderHouseMarks[];
@@ -724,6 +811,8 @@ function Overview({
   onReview: (filter?: { project_id?: string; legend_id?: string }) => void;
   onOpenDrawing: (ht: { project_id: string; name: string; filepath: string }, page?: number) => void;
   onRerun: () => void;
+  onFresh: () => void;
+  onDelete: () => void;
   onPlots: (pid: string, n: number) => void;
   apiKey: string;
   onAIStarted: (t: Tender) => void;
@@ -821,9 +910,25 @@ function Overview({
               </>
             )}
           </MenuButton>
-          <button className="btn btn-ghost" onClick={onRerun} disabled={t.status === "running"}>
-            <Zap size={14} /> Run again
-          </button>
+          <MenuButton label="Run again" className="btn btn-ghost" align="right" trigger={<><Zap size={14} /> Run again <ChevronDown size={13} /></>}>
+            {(close) => (
+              <>
+                <button className="menu-item" disabled={t.status === "running"} onClick={() => { close(); onRerun(); }}>
+                  <Zap size={15} />
+                  <span className="meta">Run again<small>Re-counts every sheet. Keeps marks you approved or added and marks the AI confirmed</small></span>
+                </button>
+                <button className="menu-item" disabled={t.status === "running"} onClick={() => { close(); onFresh(); }}>
+                  <RotateCcw size={15} />
+                  <span className="meta">Start from scratch<small>Deletes every mark, approved and AI-checked too, then counts afresh</small></span>
+                </button>
+                <hr />
+                <button className="menu-item danger" disabled={t.status === "running"} onClick={() => { close(); onDelete(); }}>
+                  <Trash2 size={15} />
+                  <span className="meta">Delete tender<small>Removes the pack and everything counted from it</small></span>
+                </button>
+              </>
+            )}
+          </MenuButton>
           <button className="btn btn-copper btn-lg" onClick={() => onReview()} disabled={!data.toReview && t.status !== "running"}>
             Start review queue <span className="kbd">{data.toReview}</span> <ArrowRight size={15} />
           </button>

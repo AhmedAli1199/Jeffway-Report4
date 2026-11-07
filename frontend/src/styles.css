@@ -701,3 +701,11 @@ button, input, select, textarea { font: inherit; color: inherit; }
 .chip-check.on { background: var(--surface); box-shadow: inset 0 0 0 1px var(--fg-3); }
 .chip-check input { margin: 0; }
 .boq tr.row-win td { background: var(--ok-soft); }
+
+/* tender list: delete button beside each row */
+.tender-row-wrap { position: relative; }
+.tender-row-wrap .tender-row { width: 100%; padding-right: 56px; }
+.tender-del { position: absolute; right: 44px; top: 50%; transform: translateY(-50%); opacity: 0; transition: opacity .15s; }
+.tender-row-wrap:hover .tender-del, .tender-del:focus-visible { opacity: 1; }
+.tender-del:hover { color: var(--reject); }
+.menu-item.danger { color: var(--reject); }

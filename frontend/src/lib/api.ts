@@ -232,6 +232,10 @@ export const api = {
   exportTenderWorkbook: (id: string, name: string, mode: "counted" | "approved", threshold: number) =>
     download(`/tenders/${q(id)}/export`, { mode, threshold }, `${name} - Tender workbook.xlsx`, "Workbook export failed"),
   stopTender: (id: string) => postJson<Tender>(`/tenders/${q(id)}/stop`, {}, "Couldn't stop the run"),
+  resetTender: (id: string) => postJson<Tender>(`/tenders/${q(id)}/reset`, {}, "Couldn't clear the tender"),
+  async deleteTender(id: string): Promise<void> {
+    await request<unknown>(`/tenders/${q(id)}`, { method: "DELETE" }, "Couldn't delete the tender");
+  },
   setSheets: (id: string, rel_path: string, page_indexes: number[]) =>
     postJson<Tender>(`/tenders/${q(id)}/sheets`, { rel_path, page_indexes }, "Couldn't save the sheet choice"),
   pagePreviewUrl: (filepath: string, page: number, width = 2400) =>

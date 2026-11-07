@@ -665,6 +665,46 @@ def _run_inner(tid: str, s: Dict[str, Any]) -> None:
 KEEP_ON_RERUN = ("user_verified", "manual_added", "ai_verified")
 
 
+def reset_tender(tid: str) -> Dict[str, Any]:
+    """Start from scratch: delete every mark of every house type (approved, hand-added and AI-checked too),
+    the AI-check history and the run progress. The pack, sheet choices and plot numbers are kept."""
+    with _lock:
+        t = load_tender(tid)
+        if not t:
+            raise KeyError(tid)
+        th = _running.get(tid)
+        if (th and th.is_alive()) or (_running.get(f"{tid}#ai") and _running[f"{tid}#ai"].is_alive()):
+            raise RuntimeError("Stop the run (or wait for the AI check) before starting from scratch")
+        for ht in t.get("house_types", []):
+            st = load_state(ht["project_id"])
+            st["markers"] = []
+            save_state(ht["project_id"], st)
+        for k in ("sheet_state", "ai_runs", "ai", "ai_progress", "summary", "layer_check", "checks",
+                  "finished_at", "duration_s", "legend_entries_removed"):
+            t.pop(k, None)
+        t.update(status="uploaded", cancel=False,
+                 progress={"stage": "uploaded", "message": "Cleared: ready to run from scratch", "done": 0, "total": 0})
+        save_tender(t)
+        return t
+
+
+def delete_tender(tid: str) -> None:
+    """Delete a tender completely: its uploaded pack, every house type's marks and its results.
+    Spend already recorded in the cost ledger is kept (it was real money)."""
+    with _lock:
+        t = load_tender(tid)
+        if not t:
+            raise KeyError(tid)
+        th = _running.get(tid)
+        if th and th.is_alive():
+            raise RuntimeError("Stop the run before deleting this tender")
+        for ht in t.get("house_types", []):
+            shutil.rmtree(PROJECTS_DIR / ht["project_id"], ignore_errors=True)
+        shutil.rmtree(TENDERS_DIR / tid, ignore_errors=True)
+        _running.pop(tid, None)
+        _running.pop(f"{tid}#ai", None)
+
+
 def _finish_house(pid: str, ht: Dict[str, Any], checks) -> None:
     """Run the per-house checks over everything saved for this house type, then save."""
     titles = {p["page_index"]: p.get("title") or "" for p in ht["electrical_pages"]}
