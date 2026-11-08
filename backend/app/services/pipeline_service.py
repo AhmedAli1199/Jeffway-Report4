@@ -326,7 +326,14 @@ def refresh_sheet_choice(tid: str) -> int:
             continue
         elec = [{"page_index": p["page_index"], "page_number": p["page_number"], "title": p.get("title", "")}
                 for p in info["pages"] if p.get("is_electrical")]
-        if elec and [p["page_index"] for p in elec] != [p["page_index"] for p in ht.get("electrical_pages", [])]:
+        if not elec:
+            updates[ht["project_id"]] = {"drop": True, "pages": info["total_pages"], "sheets": [{
+                "page_index": p["page_index"], "page_number": p["page_number"], "title": p.get("title", ""),
+                "verdict": (p.get("evidence") or {}).get("verdict", "no"),
+                "legend_hits": (p.get("evidence") or {}).get("legend_hits", 0),
+                "reasons": (p.get("evidence") or {}).get("reasons", []),
+            } for p in info["pages"]]}
+        elif [p["page_index"] for p in elec] != [p["page_index"] for p in ht.get("electrical_pages", [])]:
             updates[ht["project_id"]] = {"electrical_pages": elec, "sheets": [{
                 "page_index": p["page_index"], "page_number": p["page_number"], "title": p.get("title", ""),
                 "verdict": (p.get("evidence") or {}).get("verdict", "yes" if p.get("is_electrical") else "no"),
@@ -340,11 +347,21 @@ def refresh_sheet_choice(tid: str) -> int:
         if not t:
             return 0
         n = 0
-        for ht in t.get("house_types", []):
+        for ht in list(t.get("house_types", [])):
             u = updates.get(ht["project_id"])
-            if u and not ht.get("sheets_set_by_hand"):  # someone may have picked sheets meanwhile
-                ht.update(u)
-                n += 1
+            if not u or ht.get("sheets_set_by_hand"):  # someone may have picked sheets meanwhile
+                continue
+            n += 1
+            if u.get("drop"):  # no electrical sheets under the current rules (e.g. a communal services layout)
+                t["house_types"].remove(ht)
+                t.setdefault("documents", []).append({
+                    "path": ht.get("rel_path") or ht["filename"], "kind": "pdf", "pages": u["pages"],
+                    "filepath": ht["filepath"], "sheets": u["sheets"],
+                    "maybe": sum(1 for p in u["sheets"] if p.get("verdict") == "maybe"),
+                    "plots": ht.get("plots", 1), "plots_source": ht.get("plots_source"),
+                })
+                continue
+            ht.update(u)
         if n:
             save_tender(t)
     return n

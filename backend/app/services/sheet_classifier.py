@@ -22,6 +22,11 @@ from typing import Any, Dict, List
 import fitz
 
 POSITIVE = re.compile(r"\b(electrical|electric|elec|lighting|small power|power|m\s*&\s*e|mechanical\s*(?:&|and)\s*electrical|services|containment|fire alarm)\b", re.I)
+# Communal / landlord areas of apartment blocks: Jeffway prices these per block on the Communals tab (lighting,
+# AOV, door entry as kits and quotes), not as house-type quantities
+COMMUNAL = re.compile(r"\b(communal|landlords?'?|common areas?|core|stair ?cores?|bin stores?|cycle stores?)\b", re.I)
+# A level of its own that only an M&E plan shows (the loft): counted even without a legend
+OWN_LEVEL = re.compile(r"\b(roof|loft)\b", re.I)
 NEGATIVE = re.compile(
     r"\b(elevations?|sections?|foundations?|joists?|setting out|drainage|site plan|sales|landscap\w*|external works|"
     r"structural|roof truss|window|door schedule|details?|fire strategy|fire safety|means of escape|escape|"
@@ -181,7 +186,10 @@ def classify_page(page: "fitz.Page") -> Dict[str, Any]:
     else:
         reasons.append("No legend and no electrical items mentioned")
 
-    if _is_register(rich):
+    if COMMUNAL.search(title or ""):
+        verdict = "no"
+        reasons.append("Communal / landlord areas: Jeffway prices these per block on the Communals tab, not per house type")
+    elif _is_register(rich):
         verdict = "no"
         title = title if not pos else "Cover sheet / drawing register"
         reasons = [f'Title: "{title}"', "Lists many drawings: a cover sheet or drawing register"]
@@ -194,9 +202,9 @@ def classify_page(page: "fitz.Page") -> Dict[str, Any]:
     elif has_legend:
         verdict = "yes"
         reasons.append("Counted: an electrical plan carries its own legend")
-    elif pos and plan_like:
+    elif pos and plan_like and OWN_LEVEL.search(title):
         verdict = "yes"
-        reasons.append("Counted: an electrical / M&E plan of its own level (e.g. the roof void), so its items aren't on the floor plans")
+        reasons.append("Counted: an M&E plan of the roof / loft, a level the floor plans don't show")
     elif pos:
         verdict = "maybe"
         reasons.append("Electrical title but no legend: its symbols may already be on the floor plans, so check before counting")
