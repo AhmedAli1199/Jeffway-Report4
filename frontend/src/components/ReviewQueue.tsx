@@ -11,19 +11,29 @@ export type QueueView = "left" | "unchecked" | "ai" | "missed" | "all";
 const VIEWS: { id: QueueView; label: string; hint: string }[] = [
   { id: "unchecked", label: "Not checked by AI", hint: "Unreviewed marks the AI hasn't confirmed: the ones that need a person" },
   { id: "ai", label: "AI-confirmed", hint: "Marks the AI kept: spot-check them or approve them all at once" },
-  { id: "left", label: "Everything left", hint: "Every unreviewed mark at or above the score threshold" },
+  { id: "left", label: "Everything left", hint: "Every unreviewed mark in the score range" },
   { id: "missed", label: "Possible misses", hint: "Items drawn on a symbol's own CAD layer that nothing counted: approve the real ones" },
   { id: "all", label: "All marks", hint: "Every mark at any score, including ones already approved" },
 ];
 
+/** The first-pass score range the queue shows: from lo up to (not including) hi; hi of 1 means "and above". */
+export type ScoreRange = { lo: number; hi: number };
+const inRange = (m: Marker, r: ScoreRange) => m.confidence_score >= r.lo && (r.hi >= 1 || m.confidence_score < r.hi);
+
+const PRESETS: { label: string; hint: string; r: ScoreRange }[] = [
+  { label: "Borderline 60–85%", hint: "Where the mistakes are: strong matches above 85% are usually right", r: { lo: 0.6, hi: 0.85 } },
+  { label: "Strong 85%+", hint: "Spot-check the strong matches", r: { lo: 0.85, hi: 1 } },
+  { label: "Everything 55%+", hint: "Every mark the first pass kept", r: { lo: 0.55, hi: 1 } },
+];
+
 /** Which marks each view shows. */
-function inView(view: QueueView, m: Marker, threshold: number): boolean {
+function inView(view: QueueView, m: Marker, range: ScoreRange): boolean {
   const done = isApproved(m);
   if (view === "all") return true;
   if (done) return false;
   if (view === "ai") return m.status === "ai_verified";
   if (view === "missed") return m.status === "possible_missed";
-  if (m.confidence_score < threshold) return false;
+  if (!inRange(m, range)) return false;
   if (view === "unchecked") return m.status !== "ai_verified";
   return true;
 }
@@ -36,7 +46,7 @@ interface Item {
 type Done = { kind: "approve" | "reject"; item: Item };
 
 export function ReviewQueue({
-  id, theme, setTheme, onHome, onBack, onOpenDrawing, initial, threshold, setThreshold,
+  id, theme, setTheme, onHome, onBack, onOpenDrawing, initial, threshold,
 }: {
   id: string;
   theme: ThemePref;
@@ -57,7 +67,18 @@ export function ReviewQueue({
   const [pos, setPos] = useState(0);
   const [history, setHistory] = useState<Done[]>([]);
   const [confirmAll, setConfirmAll] = useState(false);
+  const [confirmAbove, setConfirmAbove] = useState(false);
   const [busy, setBusy] = useState(false);
+  // The queue's own score range: separate from the count threshold on the overview, so narrowing what you look at
+  // never changes what gets counted
+  const [range, setRangeState] = useState<ScoreRange>(() => store.get<ScoreRange>("pl.queueRange", { lo: threshold, hi: 1 }));
+  const setRange = (r: ScoreRange) => {
+    const lo = Math.max(0.5, Math.min(r.lo, 0.99));
+    const hi = Math.max(lo + 0.01, Math.min(r.hi, 1));
+    setRangeState({ lo, hi });
+    store.set("pl.queueRange", { lo, hi });
+    setPos(0);
+  };
   const [view, setViewState] = useState<QueueView>(() => store.get<QueueView>("pl.queueView", "left"));
   const setView = (v: QueueView) => {
     setViewState(v);
@@ -116,7 +137,7 @@ export function ReviewQueue({
       if (house && h.project_id !== house) continue;
       const pageOrder = new Map(h.electrical_pages.map((p, i) => [p.page_index, i]));
       const ms = h.markers
-        .filter((m) => inView(view, m, threshold) && (!legend || m.legend_id === legend))
+        .filter((m) => inView(view, m, range) && (!legend || m.legend_id === legend))
         .sort(
           (a, b) =>
             (pageOrder.get(a.page_index) ?? 99) - (pageOrder.get(b.page_index) ?? 99) ||
@@ -127,7 +148,7 @@ export function ReviewQueue({
       for (const m of ms) out.push({ m, h });
     }
     return out;
-  }, [houses, house, legend, threshold, labels, view]);
+  }, [houses, house, legend, range, labels, view]);
 
   // How many marks each view holds, for the current house type / symbol filter
   const viewCounts = useMemo(() => {
@@ -136,11 +157,11 @@ export function ReviewQueue({
       if (house && h.project_id !== house) continue;
       for (const m of h.markers) {
         if (legend && m.legend_id !== legend) continue;
-        for (const v of VIEWS) if (inView(v.id, m, threshold)) c[v.id]++;
+        for (const v of VIEWS) if (inView(v.id, m, range)) c[v.id]++;
       }
     }
     return c;
-  }, [houses, house, legend, threshold]);
+  }, [houses, house, legend, range]);
 
   const cur = queue[Math.min(pos, queue.length - 1)] as Item | undefined;
   useEffect(() => {
@@ -211,7 +232,7 @@ export function ReviewQueue({
     const out: Item[] = [];
     for (const h of houses ?? []) {
       if (house && h.project_id !== house) continue;
-      for (const m of h.markers) if (inView("ai", m, threshold) && (!legend || m.legend_id === legend)) out.push({ m, h });
+      for (const m of h.markers) if (inView("ai", m, range) && (!legend || m.legend_id === legend)) out.push({ m, h });
     }
     return out;
   };
@@ -273,9 +294,21 @@ export function ReviewQueue({
   };
   const legendsInView = useMemo(() => {
     const ids = new Set<string>();
-    for (const h of houses ?? []) if (!house || h.project_id === house) for (const m of h.markers) if (inView(view, m, threshold)) ids.add(m.legend_id);
+    for (const h of houses ?? []) if (!house || h.project_id === house) for (const m of h.markers) if (inView(view, m, range)) ids.add(m.legend_id);
     return [...ids].sort((a, b) => (labels.get(a)?.label ?? "").localeCompare(labels.get(b)?.label ?? ""));
-  }, [houses, house, threshold, labels, view]);
+  }, [houses, house, range, labels, view]);
+
+  // Unreviewed marks scoring above the range: hidden from the queue, offered for approval in one go
+  const above = useMemo(() => {
+    const out: Item[] = [];
+    if (range.hi >= 1) return out;
+    for (const h of houses ?? []) {
+      if (house && h.project_id !== house) continue;
+      for (const m of h.markers)
+        if (!isApproved(m) && m.status !== "possible_missed" && m.confidence_score >= range.hi && (!legend || m.legend_id === legend)) out.push({ m, h });
+    }
+    return out;
+  }, [houses, house, legend, range]);
 
   return (
     <div className="shell">
@@ -298,13 +331,58 @@ export function ReviewQueue({
               <option value="">All symbols</option>
               {legendsInView.map((l) => <option key={l} value={l}>{labels.get(l)?.label ?? l}</option>)}
             </select>
-            <div className="row grow" style={{ minWidth: 200 }}>
-              <span className="muted" style={{ whiteSpace: "nowrap" }}>Show from</span>
-              <input type="range" className="slider" min={0.55} max={0.95} step={0.01} value={threshold}
-                onChange={(e) => { setThreshold(Number(e.target.value)); setPos(0); }} aria-label="Minimum score" />
-              <b className="mono">{Math.round(threshold * 100)}%</b>
+            <div className="score-range grow">
+              <span className="muted">Score</span>
+              <label className="sr-field">
+                <span>from</span>
+                <input type="range" className="slider" min={0.5} max={0.99} step={0.01} value={range.lo}
+                  onChange={(e) => setRange({ lo: Number(e.target.value), hi: range.hi })} aria-label="Lowest first-pass score shown" />
+                <b className="mono">{Math.round(range.lo * 100)}%</b>
+              </label>
+              <label className="sr-field">
+                <span>to</span>
+                <input type="range" className="slider" min={0.51} max={1} step={0.01} value={range.hi}
+                  onChange={(e) => setRange({ lo: range.lo, hi: Number(e.target.value) })} aria-label="Highest first-pass score shown" />
+                <b className="mono">{range.hi >= 1 ? "100%" : `${Math.round(range.hi * 100)}%`}</b>
+              </label>
             </div>
           </div>
+          <div className="range-presets" role="group" aria-label="Score range presets">
+            {PRESETS.map((p) => (
+              <button key={p.label} className={cx("chip-check", range.lo === p.r.lo && range.hi === p.r.hi && "on")} title={p.hint} onClick={() => setRange(p.r)}>
+                {p.label}
+              </button>
+            ))}
+            <span className="muted" style={{ fontSize: 12 }}>
+              The range only changes what you look at here. What gets counted is set on the overview ({Math.round(threshold * 100)}% and up, plus anything you approve).
+            </span>
+          </div>
+          {above.length > 0 && view !== "missed" && view !== "all" && (
+            <div className="queue-tip">
+              <CircleCheck size={14} style={{ color: "var(--ok)", flex: "none" }} />
+              <span className="grow">
+                <b>{above.length.toLocaleString()}</b> unreviewed marks score {Math.round(range.hi * 100)}% or more and are hidden here.
+                {range.hi >= threshold ? " They are counted already." : ""} Approve them in one go once you've spot-checked a few.
+              </span>
+              <button className="btn btn-ghost btn-sm" onClick={() => setRange({ lo: range.hi, hi: 1 })}>Spot-check</button>
+              <button className="btn btn-ok btn-sm" disabled={busy} onClick={() => setConfirmAbove(true)}>
+                <CheckCheck size={13} /> Approve all {above.length.toLocaleString()}
+              </button>
+            </div>
+          )}
+          {confirmAbove && (
+            <div className="queue-tip" style={{ background: "var(--review-soft)" }}>
+              <TriangleAlert size={14} style={{ color: "var(--review)", flex: "none" }} />
+              <span className="grow">
+                Approve all <b>{above.length.toLocaleString()}</b> marks scoring {Math.round(range.hi * 100)}% or more
+                {house ? " in this house type" : " in every house type"}{legend ? " for this symbol" : ""}? Each becomes an approved count.
+              </span>
+              <button className="btn btn-ghost btn-sm" onClick={() => setConfirmAbove(false)}>Cancel</button>
+              <button className="btn btn-ok btn-sm" disabled={busy} onClick={async () => { await approveIds(above); setConfirmAbove(false); }}>
+                <CheckCheck size={13} /> Yes, approve them
+              </button>
+            </div>
+          )}
 
           <div className="queue-views" role="tablist" aria-label="Which marks to review">
             {VIEWS.map((v) => (
@@ -383,8 +461,8 @@ export function ReviewQueue({
                       : "All done in this view"}
               </h3>
               <p>
-                Nothing left above {Math.round(threshold * 100)}%
-                {house || legend ? " for this filter" : ""}. Lower the slider to check weaker matches, or go back to the overview.
+                Nothing left between {Math.round(range.lo * 100)}% and {range.hi >= 1 ? "100" : Math.round(range.hi * 100)}%
+                {house || legend ? " for this filter" : ""}. Widen the score range to see more, or go back to the overview.
               </p>
               <div className="row">
                 {history.length > 0 && <button className="btn btn-ghost" onClick={() => { lastRestored.current = history[history.length - 1].item.m.marker_id; undo(); }}><Undo2 size={14} /> Undo last</button>}

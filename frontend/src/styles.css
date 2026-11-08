@@ -709,3 +709,11 @@ button, input, select, textarea { font: inherit; color: inherit; }
 .tender-row-wrap:hover .tender-del, .tender-del:focus-visible { opacity: 1; }
 .tender-del:hover { color: var(--reject); }
 .menu-item.danger { color: var(--reject); }
+
+/* review queue: score range */
+.score-range { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; min-width: 260px; }
+.score-range .sr-field { display: flex; align-items: center; gap: 8px; flex: 1; min-width: 160px; }
+.score-range .sr-field > span { color: var(--fg-3); font-size: 12px; }
+.score-range .sr-field .slider { flex: 1; }
+.range-presets { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin: -4px 0 4px; }
+.range-presets .chip-check { cursor: pointer; border: 0; color: var(--fg); }
