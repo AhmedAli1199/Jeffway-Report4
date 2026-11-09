@@ -209,12 +209,26 @@ def page_preview(filepath: str, page_index: int, w: int = 900):
 
 
 @router.get("/crop/image")
-def crop(filepath: str, page_index: int, x: float, y: float, w: float, h: float, pad: float = 2.0, size: int = 360):
-    """A square crop around a mark, scaled for the review queue. pad is a multiple of the mark size."""
+def crop(filepath: str, page_index: int, x: float, y: float, w: float, h: float, pad: float = 2.0, size: int = 360,
+         exact: bool = False):
+    """A square crop around a mark, scaled for the review queue. pad is a multiple of the mark size.
+    exact: just that rectangle (a legend entry), centred on white so nothing around it shows."""
     path = Path(filepath)
     if not path.exists():
         raise HTTPException(404, "PDF not found")
     img_path, W, H = PDFService.render_page_image(path, page_index, 200)
+    if exact:
+        box = (int(max(0, x - 4)), int(max(0, y - 4)), int(min(W, x + w + 4)), int(min(H, y + h + 4)))
+        with Image.open(img_path) as im:
+            part = im.convert("RGB").crop(box)
+        side = int(max(part.width, part.height) * 1.1)
+        c = Image.new("RGB", (side, side), "white")
+        c.paste(part, ((side - part.width) // 2, (side - part.height) // 2))
+        scale = size / side
+        c = c.resize((size, size), Image.Resampling.LANCZOS) if scale != 1 else c
+        buf = io.BytesIO()
+        c.save(buf, format="PNG")
+        return Response(buf.getvalue(), media_type="image/png", headers={"Cache-Control": "max-age=86400"})
     cx, cy = x + w / 2, y + h / 2
     half = max(w, h) * pad / 2 + 6
     box = (int(max(0, cx - half)), int(max(0, cy - half)), int(min(W, cx + half)), int(min(H, cy + half)))

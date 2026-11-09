@@ -291,6 +291,7 @@ export function ReviewQueue({
     room_rule?: { rule: string; from: string; room: string };
     detail_sheet?: { note: string };
     relabelled_from?: string;
+    legend_entry?: { x: number; y: number; width: number; height: number };
   };
   const legendsInView = useMemo(() => {
     const ids = new Set<string>();
@@ -496,9 +497,13 @@ export function ReviewQueue({
               <div className="compare">
                 <figure>
                   <div className="frame sample">
-                    {samples.get(cur.m.legend_id) ? <img src={samples.get(cur.m.legend_id)} alt="Library sample" /> : <span className="muted">No sample</span>}
+                    {meta.legend_entry ? (
+                      <img src={api.cropUrl(cur.h.filepath, cur.m.page_index, meta.legend_entry, 1, 300, true)} alt="This sheet's legend entry" />
+                    ) : samples.get(cur.m.legend_id) ? (
+                      <img src={samples.get(cur.m.legend_id)} alt="Library sample" />
+                    ) : <span className="muted">No sample</span>}
                   </div>
-                  <figcaption>Library sample</figcaption>
+                  <figcaption>{meta.legend_entry ? "This sheet's legend (its code included)" : "Library sample"}</figcaption>
                 </figure>
                 <figure>
                   <div className="frame found">

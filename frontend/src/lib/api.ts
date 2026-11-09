@@ -243,8 +243,8 @@ export const api = {
   costs: () => request<CostSummary>("/tenders/costs/summary", undefined, "Couldn't load AI spend"),
   setPlots: (id: string, project_id: string, plots: number) =>
     postJson<Tender>(`/tenders/${q(id)}/plots`, { project_id, plots }, "Couldn't save plots"),
-  cropUrl: (filepath: string, page: number, m: { x: number; y: number; width: number; height: number }, pad = 2.2, size = 360) =>
-    `${API_BASE}/tenders/crop/image?filepath=${q(filepath)}&page_index=${page}&x=${m.x}&y=${m.y}&w=${m.width}&h=${m.height}&pad=${pad}&size=${size}`,
+  cropUrl: (filepath: string, page: number, m: { x: number; y: number; width: number; height: number }, pad = 2.2, size = 360, exact = false) =>
+    `${API_BASE}/tenders/crop/image?filepath=${q(filepath)}&page_index=${page}&x=${m.x}&y=${m.y}&w=${m.width}&h=${m.height}&pad=${pad}&size=${size}${exact ? "&exact=true" : ""}`,
 
   exportTakeoff: (p: ExportPayload) =>
     download("/exports/excel", p, `${p.project_name} - Takeoff.xlsx`, "Excel export failed"),

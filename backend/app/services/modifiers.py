@@ -146,6 +146,8 @@ def legend_modifiers(words) -> Dict[str, Any]:
         "row_tokens": {r["text"]: r["tokens"] for r in rows},
         # where each symbol's legend row sits: its glyph is drawn just left of the text
         "row_boxes": {sid: (rows[i]["xd"] if rows[i]["xd"] is not None else rows[i]["x0"], rows[i]["y0"], rows[i]["y1"]) for sid, i in own_row.items()},
+        # where the row's text starts (its first word, even "1" of "1 gang"): the legend picture stops there
+        "row_text_x0": {sid: rows[i]["x0"] for sid, i in own_row.items()},
     }
 
 
@@ -222,6 +224,20 @@ def describe_for_ai(mods: Dict[str, Any], legend_id: str) -> str:
     return "Codes printed beside symbols on THIS sheet's legend (read from the CAD file):\n" + "\n".join(lines) + "\n" + target
 
 
+def legend_entry_box(mods: Dict[str, Any], sid: str) -> Optional[Dict[str, float]]:
+    """Where a symbol's own entry (glyph + its code letters) sits in this sheet's legend, in image pixels:
+    the review queue shows it as the reference picture, so it always carries the right code."""
+    rb = (mods.get("row_boxes") or {}).get(sid)
+    if not rb:
+        return None
+    xd, y0, y1 = rb
+    tx = (mods.get("row_text_x0") or {}).get(sid, xd)
+    right = tx if tx < xd and xd - tx < 60 else xd  # "1 gang …": stop before the "1"; a letter inside the glyph doesn't count
+    h = max(12.0, y1 - y0)
+    x0 = max(0.0, right - 4.2 * h)
+    return {"x": round(x0, 1), "y": round(y0 - 0.15 * h, 1), "width": round(right - 3 - x0, 1), "height": round((y1 - y0) + 0.3 * h, 1)}
+
+
 def apply_to_sheet(pdf: Path, page_index: int, marks: List[Dict[str, Any]], library_ids: Set[str],
                    only: Optional[List[Dict[str, Any]]] = None, relabel_only: bool = False) -> int:
     """First-pass check. A mark carrying another item's code is moved to that symbol if it's in the
@@ -246,6 +262,9 @@ def apply_to_sheet(pdf: Path, page_index: int, marks: List[Dict[str, Any]], libr
         meta["modifier_check"] = res
         if res["extra"] and res["relabel_to"] and res["relabel_to"] in library_ids:
             meta["relabelled_from"] = m["legend_id"]
+            box = legend_entry_box(mods, res["relabel_to"])
+            if box:
+                meta["legend_entry"] = box
             m["legend_id"] = res["relabel_to"]
             m["status"] = "needs_review"
         else:
@@ -280,6 +299,9 @@ def confirm_by_code(pdf: Path, page_index: int, marks: List[Dict[str, Any]], aut
             meta = dict(m.get("metadata") or {})
             meta["first_pass_score_before_code"] = m["confidence_score"]
             meta["code_confirmed"] = {"codes": sorted(own), "note": f'"{", ".join(sorted(own))}" printed beside it, the code this symbol carries on the legend'}
+            box = legend_entry_box(mods, m["legend_id"])
+            if box:
+                meta["legend_entry"] = box
             m["metadata"] = meta
             m["confidence_score"] = round(auto_high, 3)
             m["status"] = "ai_unverified"
